@@ -443,6 +443,54 @@ class AsciiVisualizer:
 
         return lines
 
+    def render_oscilloscope(
+        self,
+        time_sec: float,
+        is_active: bool = True,
+        width: int = 42,
+        height: int = 5,
+    ) -> List[Text]:
+        """
+        Renders a Matrix-style raw oscilloscope waveform.
+        """
+        lines: List[Text] = []
+        if not is_active:
+            for _ in range(height):
+                lines.append(Text("-" * width, style="dim green"))
+            return lines
+
+        t = time_sec * 3.0
+        wave_chars = ["_", ".", "-", "~", "*", "+", "=", "#", "█"] if not self.safe_ascii else ["_", ".", "-", "~", "*", "+", "=", "#", "@"]
+        
+        for y in range(height):
+            line = Text()
+            for x in range(width):
+                # Complex wave equation for cyber aesthetic
+                val = math.sin(t + x * 0.2) + 0.5 * math.cos(t * 1.5 - x * 0.4) + 0.3 * math.sin(t * 3.1 + x * 0.1)
+                
+                # Normalize to 0..1
+                val = max(0.0, min(1.0, (val + 1.8) / 3.6))
+                
+                # Jitter
+                if random.random() > 0.95:
+                    val = random.random()
+                
+                # Height threshold check
+                row_threshold = 1.0 - (y / float(height - 1)) if height > 1 else 0.5
+                
+                if abs(val - row_threshold) < (1.0 / height):
+                    idx = int(val * (len(wave_chars) - 1))
+                    style = "bright_cyan" if val > 0.8 else ("bright_green" if val > 0.4 else "green")
+                    line.append(wave_chars[idx], style=style)
+                else:
+                    # Background matrix rain
+                    if random.random() > 0.98:
+                        line.append(random.choice(["0", "1"]), style="dim green")
+                    else:
+                        line.append(" ")
+            lines.append(line)
+        return lines
+
     # =========================================================================
     # 3. Pulse & Activity Spinner
     # =========================================================================
@@ -537,16 +585,43 @@ class AsciiVisualizer:
             # Inline L / R
             table.add_row(self.render_vu_meter(cur_l, cur_r, width=meter_width))
 
-        # 3. 7-Band Spectrum Equalizer
-        spec_lines = self.render_spectrum_vertical(
-            time_sec=time_sec,
-            progress=progress,
-            speed=speed,
-            is_active=is_active,
-            height=spectrum_height,
-            compact_labels=compact,
-        )
-        for s_line in spec_lines:
-            table.add_row(s_line)
+        # 3. Visualizations (Spectrum + Oscilloscope)
+        if compact:
+            spec_lines = self.render_spectrum_vertical(
+                time_sec=time_sec,
+                progress=progress,
+                speed=speed,
+                is_active=is_active,
+                height=spectrum_height,
+                compact_labels=True,
+            )
+            for s_line in spec_lines:
+                table.add_row(s_line)
+        else:
+            vis_grid = Table.grid(padding=(0, 1), expand=True)
+            vis_grid.add_column("Spectrum", ratio=1)
+            vis_grid.add_column("Oscilloscope", ratio=2)
+            
+            spec_lines = self.render_spectrum_vertical(
+                time_sec=time_sec,
+                progress=progress,
+                speed=speed,
+                is_active=is_active,
+                height=spectrum_height,
+                compact_labels=False,
+            )
+            osc_lines = self.render_oscilloscope(
+                time_sec=time_sec,
+                is_active=is_active,
+                width=35,
+                height=spectrum_height + 1,
+            )
+            
+            for i in range(max(len(spec_lines), len(osc_lines))):
+                s_part = spec_lines[i] if i < len(spec_lines) else Text()
+                o_part = osc_lines[i] if i < len(osc_lines) else Text()
+                vis_grid.add_row(s_part, o_part)
+                
+            table.add_row(vis_grid)
 
         return table

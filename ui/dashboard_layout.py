@@ -304,100 +304,61 @@ class TerminalDashboardLayout:
     # -------------------------------------------------------------------------
 
     def build_header_panel(self, state: DashboardState, compact: bool = False) -> Panel:
-        """
-        Renders Header Panel:
-        - Application branding & version
-        - Per-core CPU usage meter
-        - RAM usage bar
-        - Active worker threads
-        - FFmpeg binary status
-        """
         sys_info = state.system
         grid = Table.grid(expand=True)
-
-        if compact:
-            # 80-column layout: 2 rows of telemetry
-            grid.add_column("Left", justify="left", ratio=1)
-            grid.add_column("Right", justify="right", ratio=1)
-
-            # Row 1: Branding and FFmpeg
-            title_text = Text()
-            bolt = "[*]" if self.safe_ascii else "⚡"
-            title_text.append(f"{bolt} ", style="bold bright_yellow")
-            title_text.append("TRANSCODER ", style="bold bright_cyan")
-            title_text.append(sys_info.version, style="dim white")
-
-            ffmpeg_text = Text()
-            ffmpeg_text.append("FFmpeg: ", style="bold cyan")
-            if sys_info.ffmpeg_ok:
-                ffmpeg_text.append("[OK] ", style="bold bright_green")
-                ffmpeg_text.append(sys_info.ffmpeg_version[:12], style="dim green")
-            else:
-                ffmpeg_text.append("[MISSING]", style="bold bright_red")
-
-            grid.add_row(title_text, ffmpeg_text)
-
-            # Row 2: CPU, RAM, Workers
-            stats_text = Text()
-            stats_text.append(f"CPU: {sys_info.cpu_percent:.0f}% | ", style="white")
-            stats_text.append(f"RAM: {sys_info.ram_used_gb:.1f}/{sys_info.ram_total_gb:.1f}G | ", style="white")
-            stats_text.append(f"Threads: {sys_info.active_workers}/{sys_info.max_workers}", style="bold yellow")
-            grid.add_row(stats_text, Text(""))
-
+        
+        # Cyberpunk RGB Pulse based on time
+        colors = ["bright_magenta", "bright_cyan", "bright_green", "bright_yellow", "bright_red"]
+        pulse_idx = int(state.time_seconds * 3.0) % len(colors)
+        neon = colors[pulse_idx]
+        
+        logo_text = Text()
+        if not compact:
+            logo = (
+                " █ █ █ █▀▄ █▀▀ █▀█   ▀█▀ █▀█   █▀█ █ █ █▀▄ █ █▀█ \n"
+                " ▀▄▀▄▀ █▄▀ █▀  █▄█    █  █▄█   █▀█ █ █ █▄▀ █ █▄█ \n"
+                "  ▀ ▀  ▀▀  ▀▀▀ ▀ ▀    ▀  ▀ ▀   ▀ ▀ ▀▀▀ ▀▀  ▀ ▀▀▀ "
+            )
+            logo_text.append(logo, style=f"bold {neon}")
+            
+            grid.add_column("Logo", justify="left", ratio=2)
+            grid.add_column("Stats", justify="right", ratio=3)
+            
+            stats_grid = Table.grid(expand=True)
+            stats_grid.add_column("Key", style="bold cyan")
+            stats_grid.add_column("Value")
+            
+            cpu_txt = Text(f"{sys_info.cpu_percent:>3.0f}% [", style="bold white")
+            self._render_cpu_sparkline(cpu_txt, sys_info.cpu_per_core)
+            cpu_txt.append("]", style="dim white")
+            stats_grid.add_row("CPU CORE:", cpu_txt)
+            
+            ram_txt = Text(f"{sys_info.ram_used_gb:.1f}/{sys_info.ram_total_gb:.0f}GB [", style="white")
+            self._render_mini_bar(ram_txt, sys_info.ram_percent, width=12)
+            ram_txt.append(f"] {sys_info.ram_percent:.0f}%", style="dim white")
+            stats_grid.add_row("SYS RAM:", ram_txt)
+            
+            ffmpeg_txt = Text(f"{sys_info.ffmpeg_version[:14]} ", style="dim green" if sys_info.ffmpeg_ok else "red")
+            ffmpeg_txt.append("[OK]" if sys_info.ffmpeg_ok else "[MISSING]", style="bold bright_green" if sys_info.ffmpeg_ok else "bold bright_red")
+            stats_grid.add_row("FFMPEG:", ffmpeg_txt)
+            
+            grid.add_row(logo_text, stats_grid)
         else:
-            # 120-column layout: Spacious single-row grid
-            grid.add_column("Branding", justify="left", ratio=3)
-            grid.add_column("CPU", justify="left", ratio=3)
-            grid.add_column("RAM", justify="left", ratio=3)
-            grid.add_column("Workers", justify="center", ratio=2)
-            grid.add_column("FFmpeg", justify="right", ratio=2)
-
-            # 1. Branding
-            brand_text = Text()
-            bolt = "[*]" if self.safe_ascii else "⚡"
-            brand_text.append(f"{bolt} ENTERPRISE TRANSCODER ", style="bold bright_magenta")
-            brand_text.append(f"{sys_info.version}", style="dim cyan")
-
-            # 2. CPU per-core usage bar
-            cpu_text = Text()
-            cpu_text.append("CPU: ", style="bold cyan")
-            cpu_text.append(f"{sys_info.cpu_percent:>3.0f}% ", style="bold white")
-            cpu_text.append("[", style="dim white")
-            self._render_cpu_sparkline(cpu_text, sys_info.cpu_per_core)
-            cpu_text.append("]", style="dim white")
-
-            # 3. RAM bar
-            ram_text = Text()
-            ram_text.append("RAM: ", style="bold cyan")
-            ram_text.append(f"{sys_info.ram_used_gb:.1f}/{sys_info.ram_total_gb:.0f}GB ", style="white")
-            ram_text.append("[", style="dim white")
-            self._render_mini_bar(ram_text, sys_info.ram_percent, width=8)
-            ram_text.append(f"] {sys_info.ram_percent:.0f}%", style="dim white")
-
-            # 4. Worker Threads
-            workers_text = Text()
-            workers_text.append("Workers: ", style="bold cyan")
-            w_style = "bold bright_green" if sys_info.active_workers > 0 else "dim white"
-            workers_text.append(f"{sys_info.active_workers}/{sys_info.max_workers} active", style=w_style)
-
-            # 5. FFmpeg Status
-            ffmpeg_text = Text()
-            ffmpeg_text.append("FFmpeg: ", style="bold cyan")
-            if sys_info.ffmpeg_ok:
-                ffmpeg_text.append("[OK] ", style="bold bright_green")
-                ffmpeg_text.append(sys_info.ffmpeg_version[:14], style="dim green")
-            else:
-                ffmpeg_text.append("[MISSING]", style="bold bright_red")
-
-            grid.add_row(brand_text, cpu_text, ram_text, workers_text, ffmpeg_text)
-
+            grid.add_column("Left")
+            grid.add_column("Right", justify="right")
+            title = Text(f"⚡ VIDEO TO AUDIO ", style=f"bold {neon}")
+            title.append(sys_info.version, style="dim white")
+            
+            stats = Text(f"CPU: {sys_info.cpu_percent:.0f}% | RAM: {sys_info.ram_percent:.0f}%")
+            grid.add_row(title, stats)
+            
         return Panel(
             grid,
             box=self.box_style,
-            border_style="bright_blue",
+            border_style=neon,
             padding=(0, 1),
-            title="[bold bright_white]System & Transcoder Environment[/bold bright_white]",
-            title_align="left",
+            title=f"[bold {neon}]>> NEURAL TRANSCODE MATRIX <<[/]",
+            title_align="center",
         )
 
     def _render_cpu_sparkline(self, text_obj: Text, per_core: List[float]) -> None:
