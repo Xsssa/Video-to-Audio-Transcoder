@@ -1,7 +1,7 @@
 {
-  "ffmpeg_path": "F:\\discord bot\\bin\\ffmpeg.exe",
-  "ffprobe_path": "F:\\discord bot\\bin\\ffprobe.exe",
-  "default_output_dir": "F:\\_code\\Video to audio\\output",
+  "ffmpeg_path": "patch_to_ffmpeg",
+  "ffprobe_path": "patch_to_ffprobe.exe",
+  "default_output_dir": "path_to_dir_output",
   "default_format": "mp3",
   "threads": 4,
   "ebu_r128": false,
