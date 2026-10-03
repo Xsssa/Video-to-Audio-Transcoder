@@ -362,10 +362,13 @@ class AudioVisualizerWidget(Widget):
         self,
         mode: Union[VisualizerMode, str] = VisualizerMode.SPECTRUM,
         safe_ascii: Optional[bool] = None,
+        queue_manager: Optional[Any] = None,
         id: Optional[str] = None,
         classes: Optional[str] = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(id=id, classes=classes)
+        super().__init__(id=id, classes=classes, **kwargs)
+        self.queue_manager = queue_manager
         self.can_focus = True
 
         auto_safe = not is_unicode_supported()
@@ -411,6 +414,21 @@ class AudioVisualizerWidget(Widget):
         now = time.time()
         dt = max(0.001, min(0.2, now - self._last_tick_time))
         self._last_tick_time = now
+
+        if self.queue_manager:
+            try:
+                stats = self.queue_manager.get_stats()
+                self.is_active = (stats.active_tasks > 0)
+                tasks = self.queue_manager.get_all_tasks()
+                active = next((t for t in tasks if t.status.value == "converting"), None)
+                if active:
+                    self.current_progress = active.progress
+                    try:
+                        self.current_speed = float(active.speed.replace("x", ""))
+                    except Exception:
+                        self.current_speed = 1.0
+            except Exception:
+                pass
 
         self.physics.update(
             dt=dt,

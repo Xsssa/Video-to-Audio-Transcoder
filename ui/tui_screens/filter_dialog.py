@@ -230,23 +230,16 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
         self,
         initial_options: Optional[Dict[str, Any]] = None,
         *,
+        current_options: Optional[Dict[str, Any]] = None,
         name: Optional[str] = None,
         id: Optional[str] = None,
         classes: Optional[str] = None,
     ) -> None:
         """
         Initialize the DSP Audio Filters Modal Screen.
-
-        Args:
-            initial_options: Dictionary containing optional initial values for:
-                - 'loudness_normalization' or 'ebu_r128': bool (default False)
-                - 'lossless_stream_copy' or 'lossless_copy_if_match': bool (default True)
-                - 'sample_rate': None, 'source', 44100, 48000, 96000 (default 'source')
-                - 'channels': None, 'source', 1, 2, 6 (default 'source')
-                - 'preserve_cover_art' or 'extract_cover_art': bool (default True)
         """
         super().__init__(name=name, id=id, classes=classes)
-        init = initial_options or {}
+        init = initial_options or current_options or {}
 
         # 1. Loudness Normalization (EBU R128)
         self._init_loudnorm: bool = bool(
