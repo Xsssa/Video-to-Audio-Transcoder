@@ -12,8 +12,8 @@ Transcoder TUI:
 6. Save Filters and Cancel actions returning structured configuration dictionaries upon dismiss.
 
 Design Aesthetic:
-Sleek, minimalist dark styling utilizing muted zinc/slate shades (#121214,
-#18181b, #27272a, #3f3f46, #52525b) with high-contrast neutral text and zero gaudy colors.
+Sleek, minimalist dark styling utilizing muted zinc/slate shades with clean,
+aligned cards, ultra-clean custom toggle switches, and balanced buttons.
 """
 
 from __future__ import annotations
@@ -21,11 +21,81 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
+from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import Button, Checkbox, Label, Select, Static, Switch
+from textual.widget import Widget
+from textual.widgets import Button, Label, Select, Static
+
+
+# =============================================================================
+# Custom Minimalist Toggle Switch Widget
+# =============================================================================
+
+class CleanToggle(Widget):
+    """
+    A sleek, minimalist toggle switch with clean text indicators and zero bulky borders.
+    Fully keyboard (Space/Enter) and mouse clickable.
+    """
+
+    DEFAULT_CSS = """
+    CleanToggle {
+        width: 9;
+        height: 1;
+        background: #141722;
+        color: #5e6678;
+        border: solid #1b1f2b;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+    }
+
+    CleanToggle:focus {
+        border: solid #4ba3be;
+        background: #182330;
+        color: #ffffff;
+    }
+
+    CleanToggle.-on {
+        background: #162a38;
+        color: #5cbcdb;
+        border: solid #2a4c63;
+    }
+
+    CleanToggle.-on:focus {
+        border: solid #5cbcdb;
+        background: #1d3648;
+        color: #ffffff;
+    }
+    """
+
+    value: reactive[bool] = reactive(False)
+
+    def __init__(self, value: bool = False, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.value = value
+        self.can_focus = True
+
+    def watch_value(self, val: bool) -> None:
+        self.set_class(val, "-on")
+
+    def render(self) -> Text:
+        if self.value:
+            return Text(" [ON]  ", style="bold #5cbcdb")
+        else:
+            return Text(" [OFF] ", style="dim #5e6678")
+
+    def on_click(self) -> None:
+        self.value = not self.value
+
+    def key_space(self) -> None:
+        self.value = not self.value
+
+    def key_enter(self) -> None:
+        self.value = not self.value
 
 
 # =============================================================================
@@ -67,28 +137,28 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
         width: 74;
         max-width: 95%;
         height: auto;
-        max-height: 94%;
-        overflow-y: auto;
-        background: #121214;
-        border: solid #27272a;
+        max-height: 90%;
+        background: #10121a;
+        border: round #242938;
         padding: 0 1;
     }
 
     #dialog-header {
         width: 100%;
         height: auto;
-        border-bottom: solid #27272a;
+        border-bottom: solid #1b1f2b;
         padding-bottom: 0;
+        margin-bottom: 0;
     }
 
     #dialog-title {
-        color: #f4f4f5;
+        color: #e1e4ec;
         text-style: bold;
         width: 100%;
     }
 
     #dialog-subtitle {
-        color: #71717a;
+        color: #5e6678;
         width: 100%;
     }
 
@@ -97,133 +167,117 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
         height: auto;
     }
 
-    /* Option Rows */
+    /* Option Cards */
     .option-row {
         width: 100%;
         height: auto;
+        min-height: 2;
         align: left middle;
         padding: 0 1;
-        background: #18181b;
-        border-top: solid #27272a;
+        background: #141722;
+        border-bottom: solid #1b1f2b;
     }
 
     .option-label {
         width: 1fr;
-        color: #f4f4f5;
-        text-style: bold;
+        color: #e1e4ec;
+        content-align: left middle;
     }
 
     .select-row {
         width: 100%;
         height: auto;
+        min-height: 2;
         align: left middle;
         padding: 0 1;
-        background: #18181b;
-        border-top: solid #27272a;
+        background: #141722;
+        border-bottom: solid #1b1f2b;
     }
 
     .field-label {
-        width: 18;
-        color: #a1a1aa;
-        text-style: bold;
+        width: 22;
+        color: #9aa2b4;
+        content-align: left middle;
     }
 
     .select-row Select {
         width: 1fr;
-        background: #121214;
+        background: #10121a;
         border: none;
-        color: #f4f4f5;
+        color: #e1e4ec;
+        height: 1;
     }
 
     .select-row Select:focus {
         color: #ffffff;
     }
 
-    /* Checkbox Styling */
-    Checkbox {
-        background: transparent;
-        color: #f4f4f5;
-        border: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    Checkbox:focus {
-        text-style: bold;
-    }
-
-    /* Minimalist Dark Switches */
-    Switch {
-        background: #27272a;
-        border: none;
-    }
-
-    Switch.-on {
-        background: #3f3f46;
-    }
-
-    Switch > .switch--slider {
-        background: #18181b;
-        color: #71717a;
-    }
-
-    Switch.-on > .switch--slider {
-        background: #e4e4e7;
-        color: #121214;
-    }
-
-    /* Action Footer */
+    /* Action Footer & Buttons */
     #dialog-footer {
         width: 100%;
-        height: auto;
+        height: 3;
         align: right middle;
         margin-top: 1;
-        border-top: solid #27272a;
-        padding-top: 0;
+        border-top: solid #1b1f2b;
+        padding-top: 1;
     }
 
     #dialog-hotkey-hint {
         width: 1fr;
-        color: #52525b;
+        color: #5e6678;
+        content-align: left middle;
+        height: 100%;
     }
 
     #btn-cancel {
-        background: #18181b;
-        color: #a1a1aa;
-        border: solid #3f3f46;
-        min-width: 12;
+        height: 3;
+        min-width: 14;
+        background: #141722;
+        color: #9aa2b4;
+        border: solid #242938;
         margin-right: 1;
+        text-align: center;
     }
 
     #btn-cancel:hover {
-        background: #27272a;
-        color: #f4f4f5;
-        border: solid #52525b;
+        background: #1d2332;
+        color: #e1e4ec;
+        border: solid #3d5470;
+    }
+
+    #btn-cancel:focus {
+        background: #1d2332;
+        color: #ffffff;
+        border: solid #4ba3be;
     }
 
     #btn-save {
-        background: #27272a;
-        color: #ffffff;
-        border: solid #52525b;
+        height: 3;
+        min-width: 18;
+        background: #1c3547;
+        color: #e1e4ec;
+        border: solid #2e5570;
         text-style: bold;
-        min-width: 16;
+        text-align: center;
     }
 
     #btn-save:hover {
-        background: #3f3f46;
-        border: solid #71717a;
+        background: #254659;
         color: #ffffff;
+        border: solid #5cbcdb;
     }
 
     #btn-save:focus {
-        background: #3f3f46;
-        border: double #a1a1aa;
+        background: #254659;
+        color: #ffffff;
+        border: solid #5cbcdb;
     }
     """
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel", show=True),
         Binding("ctrl+s", "save", "Save Filters", show=True),
+        Binding("enter", "save", "Save Filters", show=False),
     ]
 
     def __init__(
@@ -237,6 +291,7 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
     ) -> None:
         """
         Initialize the DSP Audio Filters Modal Screen.
+        Accepts either initial_options or current_options.
         """
         super().__init__(name=name, id=id, classes=classes)
         init = initial_options or current_options or {}
@@ -248,7 +303,7 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
 
         # 2. Lossless Stream Copy
         self._init_lossless: bool = bool(
-            init.get("lossless_stream_copy", init.get("lossless_copy_if_match", True))
+            init.get("lossless_stream_copy", init.get("lossless_copy_if_match", False))
         )
 
         # 3. Sample Rate
@@ -298,15 +353,12 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
                 # 1. EBU R128 Loudness Normalization
                 with Horizontal(classes="option-row"):
                     yield Label("EBU R128 Loudness (-16 LUFS)", classes="option-label")
-                    yield Switch(value=self._init_loudnorm, id="switch-loudnorm")
+                    yield CleanToggle(value=self._init_loudnorm, id="switch-loudnorm")
 
                 # 2. Lossless Stream Copy
                 with Horizontal(classes="option-row"):
-                    yield Checkbox(
-                        "Lossless Stream Copy (no re-encode if codec matches)",
-                        value=self._init_lossless,
-                        id="check-lossless",
-                    )
+                    yield Label("Lossless Stream Copy (bypass re-encode if codec matches)", classes="option-label")
+                    yield CleanToggle(value=self._init_lossless, id="switch-lossless")
 
                 # 3. Sample Rate
                 with Horizontal(classes="select-row"):
@@ -333,13 +385,13 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
                 # 5. Cover Art Preservation
                 with Horizontal(classes="option-row"):
                     yield Label("Preserve Cover Art (embed thumbnail/poster)", classes="option-label")
-                    yield Switch(value=self._init_cover_art, id="switch-cover-art")
+                    yield CleanToggle(value=self._init_cover_art, id="switch-cover-art")
 
             # Actions / Footer
             with Horizontal(id="dialog-footer"):
-                yield Label("[Esc] Cancel  |  [Ctrl+S] Save", id="dialog-hotkey-hint")
-                yield Button("Cancel", id="btn-cancel", variant="default")
-                yield Button("Save Filters", id="btn-save", variant="primary")
+                yield Label("Esc: Cancel  •  Ctrl+S / Enter: Save", id="dialog-hotkey-hint")
+                yield Button("Cancel", id="btn-cancel")
+                yield Button("Save Filters", id="btn-save")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button clicks for Save Filters and Cancel."""
@@ -360,27 +412,16 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
     def get_options(self) -> Dict[str, Any]:
         """
         Extract the current user-configured filter options dictionary.
-
-        Returns:
-            Dictionary containing both standard options and engine-compatible aliases:
-            - 'loudness_normalization': bool
-            - 'lossless_stream_copy': bool
-            - 'sample_rate': Optional[int] (None if 'source')
-            - 'channels': Optional[int] (None if 'source')
-            - 'preserve_cover_art': bool
-            - 'ebu_r128': bool
-            - 'lossless_copy_if_match': bool
-            - 'extract_cover_art': bool
         """
         # 1. Loudness Normalization
         try:
-            loudnorm_val = self.query_one("#switch-loudnorm", Switch).value
+            loudnorm_val = self.query_one("#switch-loudnorm", CleanToggle).value
         except Exception:
             loudnorm_val = self._init_loudnorm
 
         # 2. Lossless Stream Copy
         try:
-            lossless_val = self.query_one("#check-lossless", Checkbox).value
+            lossless_val = self.query_one("#switch-lossless", CleanToggle).value
         except Exception:
             lossless_val = self._init_lossless
 
@@ -404,7 +445,7 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
 
         # 5. Cover Art Preservation
         try:
-            cover_art_val = self.query_one("#switch-cover-art", Switch).value
+            cover_art_val = self.query_one("#switch-cover-art", CleanToggle).value
         except Exception:
             cover_art_val = self._init_cover_art
 
@@ -469,13 +510,13 @@ class _FilterDialogDemoApp(App[None]):
         align: center middle;
     }
     #btn-open {
-        background: #27272a;
-        color: #f4f4f5;
-        border: solid #3f3f46;
+        background: #181d26;
+        color: #e1e4ec;
+        border: solid #2a4c63;
         min-width: 24;
     }
     #lbl-result {
-        color: #a1a1aa;
+        color: #9aa2b4;
         margin-top: 1;
     }
     """
