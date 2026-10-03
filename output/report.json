@@ -1,0 +1,36 @@
+{
+  "report_id": "rep_20261001_144851_771e98",
+  "timestamp": "2026-10-01T07:48:51.391852+00:00",
+  "total_wall_time_seconds": 0.0,
+  "total_tasks": 1,
+  "successful_tasks": 1,
+  "failed_tasks": 0,
+  "cancelled_tasks": 0,
+  "success_rate_percent": 100.0,
+  "total_input_bytes": 42352,
+  "total_output_bytes": 123445,
+  "total_space_saved_bytes": -81093,
+  "space_saved_percent": -191.5,
+  "items": [
+    {
+      "task_id": "task_fd57fef2",
+      "source_file": "F:\\_code\\Video to audio\\test_sample.mp4",
+      "output_file": "F:\\_code\\Video to audio\\output\\test_sample.mp3",
+      "target_format": "mp3",
+      "status": "COMPLETED",
+      "processing_time_seconds": 0.32,
+      "audio_duration_seconds": 3.02,
+      "input_size_bytes": 42352,
+      "output_size_bytes": 123445,
+      "space_saved_bytes": -81093,
+      "compression_percent": -191.5,
+      "speed_factor": "150.0x",
+      "codec": "mp3",
+      "bitrate_kbps": 320,
+      "sample_rate": 44100,
+      "channels": 1,
+      "error_message": null,
+      "warnings": []
+    }
+  ]
+}
