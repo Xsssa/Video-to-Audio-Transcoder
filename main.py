@@ -49,7 +49,7 @@ from processing.progress_tracker import ProgressSnapshot
 from processing.queue_manager import ConversionTask, QueueManager, TaskStatus
 from processing.reporter import create_report_from_tasks
 from processing.verifier import VerificationResult
-from ui.cli_tui import run_cli_tui
+from ui.textual_app import run_textual_app
 from ui.gui_app import run_gui
 from ui.input_handler import (
     SUPPORTED_VIDEO_EXTENSIONS,
@@ -316,7 +316,7 @@ def main() -> None:
 
     # 2. Explicit CLI TUI flag
     if args.cli:
-        run_cli_tui(initial_paths=initial_paths if initial_paths else None)
+        run_textual_app(initial_paths=initial_paths if initial_paths else None)
         return
 
     # 3. Headless conversion when --input is provided without --gui or --cli
@@ -350,7 +350,7 @@ def main() -> None:
         try:
             choice = input("Enter choice [1/2/q] (Press Enter for GUI): ").strip().lower()
             if choice == "2":
-                run_cli_tui()
+                run_textual_app()
             elif choice in ("q", "quit", "exit"):
                 sys.exit(0)
             else:
@@ -360,7 +360,7 @@ def main() -> None:
     elif is_gui_available():
         run_gui()
     else:
-        run_cli_tui()
+        run_textual_app()
 
 
 if __name__ == "__main__":
