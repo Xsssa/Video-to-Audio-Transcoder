@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import sys
 import time
+import random
 from typing import List, Optional, Tuple, Union
 
 from rich.console import RenderableType
@@ -225,11 +226,11 @@ class AsciiVisualizer:
         for i in range(width):
             if i < filled_count:
                 if i < green_zone:
-                    style = "bright_green"
+                    style = "white"
                 elif i < yellow_zone:
-                    style = "bright_yellow"
+                    style = "dim white"
                 else:
-                    style = "bold bright_red"
+                    style = "dim"
                 text_obj.append(self.char_fill, style=style)
             else:
                 text_obj.append(self.char_empty, style="dim white")
@@ -373,13 +374,13 @@ class AsciiVisualizer:
 
             # Determine color for this row
             if row >= height - 1:
-                row_style = "bold bright_red"
+                row_style = "dim"
             elif row >= height - 2:
-                row_style = "bright_yellow"
+                row_style = "dim white"
             elif row >= 1:
-                row_style = "bright_green"
+                row_style = "white"
             else:
-                row_style = "green"
+                row_style = "bold white"
 
             # Render 7 columns
             for i, amp in enumerate(amps):
@@ -406,7 +407,7 @@ class AsciiVisualizer:
         labels = self.COMPACT_BANDS if compact_labels else self.SPECTRUM_BANDS
         label_line = Text()
         for i, lbl in enumerate(labels):
-            label_line.append(lbl.center(col_width), style="bold cyan")
+            label_line.append(lbl.center(col_width), style="dim")
         lines.append(label_line)
 
         return lines
@@ -456,7 +457,7 @@ class AsciiVisualizer:
         lines: List[Text] = []
         if not is_active:
             for _ in range(height):
-                lines.append(Text("-" * width, style="dim green"))
+                lines.append(Text("-" * width, style="dim"))
             return lines
 
         t = time_sec * 3.0
@@ -465,27 +466,21 @@ class AsciiVisualizer:
         for y in range(height):
             line = Text()
             for x in range(width):
-                # Complex wave equation for cyber aesthetic
                 val = math.sin(t + x * 0.2) + 0.5 * math.cos(t * 1.5 - x * 0.4) + 0.3 * math.sin(t * 3.1 + x * 0.1)
-                
-                # Normalize to 0..1
                 val = max(0.0, min(1.0, (val + 1.8) / 3.6))
                 
-                # Jitter
                 if random.random() > 0.95:
                     val = random.random()
                 
-                # Height threshold check
                 row_threshold = 1.0 - (y / float(height - 1)) if height > 1 else 0.5
                 
                 if abs(val - row_threshold) < (1.0 / height):
                     idx = int(val * (len(wave_chars) - 1))
-                    style = "bright_cyan" if val > 0.8 else ("bright_green" if val > 0.4 else "green")
+                    style = "white" if val > 0.8 else ("dim white" if val > 0.4 else "dim")
                     line.append(wave_chars[idx], style=style)
                 else:
-                    # Background matrix rain
                     if random.random() > 0.98:
-                        line.append(random.choice(["0", "1"]), style="dim green")
+                        line.append(random.choice(["0", "1"]), style="dim")
                     else:
                         line.append(" ")
             lines.append(line)
@@ -507,8 +502,8 @@ class AsciiVisualizer:
         """
         out = Text()
         if not is_active:
-            out.append("[STANDBY] ", style="dim yellow")
-            out.append("Threads idle - Ready for transcoding", style="dim white")
+            out.append("[STANDBY] ", style="dim")
+            out.append("Threads idle", style="dim")
             return out
 
         frame_idx = int(time_sec * 8.0) % len(self.spinner_frames)
@@ -525,16 +520,16 @@ class AsciiVisualizer:
             pulse_bar[pulse_pos] = "=" if self.safe_ascii else "●"
         pulse_str = "".join(pulse_bar)
 
-        out.append(f"{self.char_bolt} ", style="bold bright_yellow")
-        out.append(f"{frame_char} ", style="bold bright_cyan")
-        out.append("CRUNCHING AUDIO ", style="bold bright_green")
-        out.append(f"[{pulse_str}] ", style="bold cyan")
+        out.append(f"{self.char_bolt} ", style="bold white")
+        out.append(f"{frame_char} ", style="dim white")
+        out.append("CRUNCHING ", style="white")
+        out.append(f"[{pulse_str}] ", style="dim")
 
         if speed_str:
-            out.append(f"{speed_str} ", style="bold yellow")
+            out.append(f"{speed_str} ", style="white")
 
         thread_lbl = "worker" if workers == 1 else "workers"
-        out.append(f"({workers} {thread_lbl})", style="dim cyan")
+        out.append(f"({workers} {thread_lbl})", style="dim")
 
         return out
 

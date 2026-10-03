@@ -47,19 +47,28 @@ class TranscoderTUI(App):
     
     CSS = """
     Screen {
-        background: $surface-darken-1;
+        background: $surface-darken-2;
     }
     
     #sidebar {
-        width: 25;
+        width: 20;
         dock: left;
         padding: 1;
-        background: $panel;
+        background: $surface-darken-1;
+        border-right: vkey $background-lighten-1;
     }
     
     #sidebar Button {
         width: 100%;
         margin-bottom: 1;
+        background: $surface;
+        color: $text;
+        border: none;
+    }
+    
+    #sidebar Button:hover {
+        background: $primary;
+        color: $text-muted;
     }
     
     #main-content {
@@ -75,27 +84,27 @@ class TranscoderTUI(App):
     #queue-container {
         width: 3fr;
         height: 100%;
-        border: solid cyan;
-        background: $surface;
+        border-right: vkey $background-lighten-1;
+        background: $surface-darken-2;
     }
     
     #monitor-container {
         width: 2fr;
         height: 100%;
-        border: solid magenta;
         padding: 1;
-        background: $surface;
+        background: $surface-darken-2;
     }
     
     #log-container {
         height: 10;
-        border: solid green;
-        background: $surface;
+        border-top: hkey $background-lighten-1;
+        background: $surface-darken-2;
         dock: bottom;
     }
     
     DataTable {
         height: 100%;
+        background: $surface-darken-2;
     }
     """
 
@@ -125,12 +134,12 @@ class TranscoderTUI(App):
         yield Header(show_clock=True)
         
         with Container(id="sidebar"):
-            yield Label("⚡ TRANSCODER", id="app-title", classes="text-bold text-center")
-            yield Button("📋 Paste Files", id="btn-add", variant="primary")
-            yield Button("▶ Start", id="btn-start", variant="success")
-            yield Button("⏸ Pause", id="btn-pause", variant="warning", disabled=True)
-            yield Button("🧹 Clear Done", id="btn-clear")
-            yield Button("🚪 Quit", id="btn-quit", variant="error")
+            yield Label("TRANSCODER", id="app-title", classes="text-bold text-center")
+            yield Button("Paste Files", id="btn-add")
+            yield Button("Start", id="btn-start")
+            yield Button("Pause", id="btn-pause", disabled=True)
+            yield Button("Clear Done", id="btn-clear")
+            yield Button("Quit", id="btn-quit")
             
         with Container(id="main-content"):
             with Horizontal(id="top-row"):
@@ -139,20 +148,20 @@ class TranscoderTUI(App):
                 with Container(id="monitor-container"):
                     yield MonitorWidget(id="monitor")
             with Container(id="log-container"):
-                yield RichLog(id="event-log", highlight=True, markup=True)
+                yield RichLog(id="event-log", highlight=False, markup=True)
                 
         yield Footer()
 
     def on_mount(self) -> None:
         """Called when app starts."""
         self.title = "Neural Transcode Matrix"
-        self.sub_title = "Advanced Enterprise Audio Extractor"
+        self.sub_title = "Minimal Workspace"
         
         table = self.query_one("#queue-table", DataTable)
         table.add_columns("ID", "Status", "Filename", "Target", "Progress", "Speed")
         
         log = self.query_one("#event-log", RichLog)
-        log.write("[bold green]System Initialized.[/] Awaiting operations...")
+        log.write("[dim]System Initialized. Awaiting operations...[/]")
         
         if self.initial_paths:
             self._add_paths(self.initial_paths)
@@ -177,23 +186,23 @@ class TranscoderTUI(App):
             paths = get_clipboard_files()
             if paths:
                 self._add_paths(paths)
-                self.query_one("#event-log", RichLog).write(f"[cyan]Added {len(paths)} files from clipboard.[/]")
+                self.query_one("#event-log", RichLog).write(f"[dim]Added {len(paths)} files from clipboard.[/]")
             else:
-                self.query_one("#event-log", RichLog).write("[yellow]No valid video files found in clipboard.[/]")
+                self.query_one("#event-log", RichLog).write("[dim]No valid video files found in clipboard.[/]")
         elif btn_id == "btn-start":
             self.queue_manager.resume_queue()
             self.query_one("#btn-start", Button).disabled = True
             self.query_one("#btn-pause", Button).disabled = False
-            self.query_one("#event-log", RichLog).write("[bold bright_blue]Conversion Started.[/]")
+            self.query_one("#event-log", RichLog).write("[dim]Conversion Started.[/]")
         elif btn_id == "btn-pause":
             self.queue_manager.pause_queue()
             self.query_one("#btn-start", Button).disabled = False
             self.query_one("#btn-pause", Button).disabled = True
-            self.query_one("#event-log", RichLog).write("[bold yellow]Conversion Paused.[/]")
+            self.query_one("#event-log", RichLog).write("[dim]Conversion Paused.[/]")
         elif btn_id == "btn-clear":
             self.queue_manager.clear_queue(cancel_active=False)
             self.refresh_table()
-            self.query_one("#event-log", RichLog).write("Cleared completed tasks.")
+            self.query_one("#event-log", RichLog).write("[dim]Cleared completed tasks.[/]")
 
     def _add_paths(self, paths: List[Path]) -> None:
         for p in paths:
@@ -218,16 +227,16 @@ class TranscoderTUI(App):
             for i, task in enumerate(tasks):
                 status_str = f"[{task.status.value}]"
                 if task.status == TaskStatus.CONVERTING:
-                    status_str = f"[bold bright_blue]{status_str}[/]"
+                    status_str = f"[white]{status_str}[/]"
                     active_task = task
                 elif task.status == TaskStatus.COMPLETED:
-                    status_str = f"[bold bright_green]{status_str}[/]"
+                    status_str = f"[dim white]{status_str}[/]"
                 elif task.status == TaskStatus.FAILED:
-                    status_str = f"[bold red]{status_str}[/]"
+                    status_str = f"[dim]{status_str}[/]"
                 elif task.status == TaskStatus.PROBING:
-                    status_str = f"[bold cyan]{status_str}[/]"
+                    status_str = f"[dim]{status_str}[/]"
                 else:
-                    status_str = f"[yellow]{status_str}[/]"
+                    status_str = f"[dim]{status_str}[/]"
 
                 fname = task.source_file.name
                 if len(fname) > 30:
@@ -260,16 +269,16 @@ class TranscoderTUI(App):
 
     # Callbacks from QueueManager (executed in worker threads, use call_from_thread)
     def _on_task_started(self, task: ConversionTask):
-        self.call_from_thread(self._log_event, f"Started: {task.source_file.name}", "cyan")
+        self.call_from_thread(self._log_event, f"Started: {task.source_file.name}", "dim")
         
     def _on_task_progress(self, task: ConversionTask, snap: Any):
         pass # Handled by interval
         
     def _on_task_completed(self, task: ConversionTask, ver: Any):
-        self.call_from_thread(self._log_event, f"Completed: {task.source_file.name}", "bright_green")
+        self.call_from_thread(self._log_event, f"Completed: {task.source_file.name}", "dim white")
         
     def _on_task_failed(self, task: ConversionTask, err: str):
-        self.call_from_thread(self._log_event, f"Failed: {task.source_file.name} - {err}", "red")
+        self.call_from_thread(self._log_event, f"Failed: {task.source_file.name} - {err}", "dim")
         
     def _on_queue_completed(self, stats: Any):
         self.call_from_thread(self._on_queue_done)
@@ -277,13 +286,13 @@ class TranscoderTUI(App):
     def _on_queue_done(self):
         self.query_one("#btn-start", Button).disabled = False
         self.query_one("#btn-pause", Button).disabled = True
-        self.query_one("#event-log", RichLog).write("[bold bright_green]Batch Queue Completed.[/]")
+        self.query_one("#event-log", RichLog).write("[dim]Batch Queue Completed.[/]")
 
-    def _log_event(self, msg: str, color: str = "white"):
+    def _log_event(self, msg: str, color: str = "dim"):
         try:
             log = self.query_one("#event-log", RichLog)
             tstamp = time.strftime("%H:%M:%S")
-            log.write(f"[dim]{tstamp}[/] [{color}]{msg}[/]")
+            log.write(f"[dim]{tstamp} {msg}[/]")
         except NoMatches:
             pass
 
