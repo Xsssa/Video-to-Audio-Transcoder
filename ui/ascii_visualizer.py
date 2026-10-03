@@ -522,7 +522,7 @@ class AsciiVisualizer:
 
         out.append(f"{self.char_bolt} ", style="bold white")
         out.append(f"{frame_char} ", style="dim white")
-        out.append("CRUNCHING ", style="white")
+        out.append("CRUNCHING AUDIO ", style="white")
         out.append(f"[{pulse_str}] ", style="dim")
 
         if speed_str:

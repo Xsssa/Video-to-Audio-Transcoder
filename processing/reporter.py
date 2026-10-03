@@ -290,6 +290,26 @@ class BatchReport:
 
         return dest
 
+    def export_txt(
+        self,
+        output_path: Optional[str | Path] = None,
+        output_dir: Optional[str | Path] = None,
+    ) -> Path:
+        """
+        Exports human-readable summary table to a plain text file.
+
+        Args:
+            output_path: Specific destination file path.
+            output_dir: Directory where the report will be created (defaults to exports/).
+
+        Returns:
+            Resolved Path of the saved TXT report.
+        """
+        dest = self._resolve_export_path("txt", output_path, output_dir)
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write(self.format_summary_table())
+        return dest
+
     def format_summary_table(self) -> str:
         """
         Formats a clean, enterprise ASCII summary table displaying batch metrics

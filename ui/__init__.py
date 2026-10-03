@@ -37,9 +37,28 @@ from ui.dashboard_layout import (
     render_dashboard,
 )
 
+from ui.tui_theme import (
+    THEME_COLORS,
+    TUI_CSS,
+    SLATE_DARK_THEME,
+    apply_tui_theme,
+    get_status_badge_markup,
+    get_status_style,
+    get_spectrum_palette,
+    get_vu_meter_color,
+)
+
 __version__ = "2.0.0"
 
 __all__ = [
+    "THEME_COLORS",
+    "TUI_CSS",
+    "SLATE_DARK_THEME",
+    "apply_tui_theme",
+    "get_status_badge_markup",
+    "get_status_style",
+    "get_spectrum_palette",
+    "get_vu_meter_color",
     "SUPPORTED_VIDEO_EXTENSIONS",
     "InputParser",
     "expand_path",

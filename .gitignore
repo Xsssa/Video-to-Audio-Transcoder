@@ -39,6 +39,8 @@ env/
 *.log
 scratch/
 test_files/
+exports/
+path_to_dir_output/
 
 # OS specific
 .DS_Store

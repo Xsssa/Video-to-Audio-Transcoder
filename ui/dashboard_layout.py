@@ -346,10 +346,12 @@ class TerminalDashboardLayout:
         else:
             grid.add_column("Left")
             grid.add_column("Right", justify="right")
-            title = Text(f"⚡ VIDEO TO AUDIO ", style=f"bold {neon}")
+            bolt = "[*]" if self.safe_ascii else "⚡"
+            title = Text(f"{bolt} ENTERPRISE TRANSCODER ", style=f"bold {neon}")
             title.append(sys_info.version, style="dim white")
             
-            stats = Text(f"CPU: {sys_info.cpu_percent:.0f}% | RAM: {sys_info.ram_percent:.0f}%")
+            ffmpeg_str = " [OK]" if sys_info.ffmpeg_ok else " [MISSING]"
+            stats = Text(f"CPU: {sys_info.cpu_percent:.0f}% | RAM: {sys_info.ram_percent:.0f}% | FFmpeg:{ffmpeg_str}")
             grid.add_row(title, stats)
             
         return Panel(
@@ -357,7 +359,7 @@ class TerminalDashboardLayout:
             box=self.box_style,
             border_style=neon,
             padding=(0, 1),
-            title=f"[bold {neon}]>> NEURAL TRANSCODE MATRIX <<[/]",
+            title=f"[bold {neon}]>> ENTERPRISE TRANSCODER // NEURAL MATRIX <<[/]",
             title_align="center",
         )
 

@@ -87,6 +87,8 @@ class ConversionTask:
 
     probe_result: Optional[MediaProbeResult] = None
     verification_result: Optional[VerificationResult] = None
+    ffmpeg_cmd: Optional[list[str]] = None
+    traceback: Optional[str] = None
 
     # Internal state flag
     _cancel_requested: bool = field(default=False, repr=False)
@@ -114,6 +116,8 @@ class ConversionTask:
             "duration_seconds": round(self.duration_seconds, 2),
             "input_size_bytes": self.input_size_bytes,
             "output_size_bytes": self.output_size_bytes,
+            "ffmpeg_cmd": self.ffmpeg_cmd,
+            "traceback": self.traceback,
         }
 
 
@@ -375,6 +379,102 @@ class QueueManager:
         self._check_queue_completion()
         return True
 
+    def remove_task(self, task_id: str) -> bool:
+        """
+        Removes a task from the queue entirely.
+        If the task is active or pending, cancels it first.
+
+        Returns:
+            True if task was found and removed, False otherwise.
+        """
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if not task:
+                return False
+
+            if not task.is_terminal:
+                self.cancel_task(task_id)
+
+            try:
+                self._pending_queue.remove(task_id)
+            except ValueError:
+                pass
+
+            self._tasks.pop(task_id, None)
+
+        self._check_queue_completion()
+        return True
+
+    def move_task_up(self, task_id: str) -> bool:
+        """
+        Moves a task up by one position in the queue.
+
+        Returns:
+            True if moved, False if already at top or not found.
+        """
+        with self._lock:
+            if task_id not in self._tasks:
+                return False
+
+            # Reorder in pending queue if present
+            try:
+                idx = self._pending_queue.index(task_id)
+                if idx > 0:
+                    self._pending_queue[idx], self._pending_queue[idx - 1] = (
+                        self._pending_queue[idx - 1],
+                        self._pending_queue[idx],
+                    )
+            except ValueError:
+                pass
+
+            # Reorder in _tasks dict to preserve display order
+            keys = list(self._tasks.keys())
+            try:
+                k_idx = keys.index(task_id)
+                if k_idx > 0:
+                    keys[k_idx], keys[k_idx - 1] = keys[k_idx - 1], keys[k_idx]
+                    self._tasks = {k: self._tasks[k] for k in keys}
+                    return True
+            except ValueError:
+                pass
+
+        return False
+
+    def move_task_down(self, task_id: str) -> bool:
+        """
+        Moves a task down by one position in the queue.
+
+        Returns:
+            True if moved, False if already at bottom or not found.
+        """
+        with self._lock:
+            if task_id not in self._tasks:
+                return False
+
+            # Reorder in pending queue if present
+            try:
+                idx = self._pending_queue.index(task_id)
+                if idx < len(self._pending_queue) - 1:
+                    self._pending_queue[idx], self._pending_queue[idx + 1] = (
+                        self._pending_queue[idx + 1],
+                        self._pending_queue[idx],
+                    )
+            except ValueError:
+                pass
+
+            # Reorder in _tasks dict to preserve display order
+            keys = list(self._tasks.keys())
+            try:
+                k_idx = keys.index(task_id)
+                if k_idx < len(keys) - 1:
+                    keys[k_idx], keys[k_idx + 1] = keys[k_idx + 1], keys[k_idx]
+                    self._tasks = {k: self._tasks[k] for k in keys}
+                    return True
+            except ValueError:
+                pass
+
+        return False
+
     def pause_queue(self) -> None:
         """Pauses dispatching new tasks to workers. Currently active tasks finish."""
         with self._lock:
@@ -549,6 +649,7 @@ class QueueManager:
 
             ffmpeg_bin = find_ffmpeg(custom_path=self.ffmpeg_path, config_path=self.config_path)
             cmd = self._build_ffmpeg_command(task, ffmpeg_bin)
+            task.ffmpeg_cmd = list(cmd)
 
             tracker = FFmpegProgressTracker(
                 total_duration=probe_result.duration,
@@ -645,10 +746,13 @@ class QueueManager:
             self._safe_call(self.on_task_failed, "task_failed", task, "Cancelled")
 
         except Exception as exc:
+            import traceback as _tb
             err_str = str(exc)
+            tb_str = _tb.format_exc()
             with self._lock:
                 task.status = TaskStatus.FAILED
                 task.error = err_str
+                task.traceback = tb_str
                 task.completed_at = time.time()
                 if task.started_at:
                     task.duration_seconds = task.completed_at - task.started_at

@@ -1,127 +1,192 @@
+"""
+ui/textual_app.py - Master Unified Textual TUI Application for Video-to-Audio Transcoder.
+
+Integrates all 10 specialized subagent components:
+1. ui.tui_theme: Slate Dark minimalist monochrome styling, zero gaudy colors.
+2. ui.tui_screens.file_picker: Interactive visual directory/video browser modal.
+3. ui.tui_screens.preset_dialog: Interactive format & quality preset modal.
+4. ui.tui_screens.filter_dialog: Interactive DSP audio filters modal (EBU R128, lossless copy, sample rate, channels).
+5. ui.tui_widgets.resource_monitor: Real-time per-core CPU, RAM, GPU acceleration, and worker telemetry.
+6. ui.tui_widgets.queue_table: Interactive queue table with row selection, reorder, delete, and task inspector.
+7. ui.tui_widgets.visualizer_widget: Smooth 3-mode audio visualizer (Braille Oscilloscope, Spectrum, VU Meter).
+8. ui.tui_screens.history_screen: Session conversion history, compression ratios, and report export.
+9. ui.tui_screens.help_screen: Interactive keyboard shortcuts and tips cheat-sheet.
+10. ui.tui_widgets.status_bar: Bottom status bar with preset badges, transient notifications, and live clock.
+"""
+
+from __future__ import annotations
+
 import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List, Optional
 
-from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, DataTable, Button, Static, RichLog, Label
-from textual.reactive import reactive
-from textual.css.query import NoMatches
 from rich.text import Text
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import Button, Footer, Header, Label, RichLog
 
-# Import core components
-from processing.queue_manager import QueueManager, ConversionTask, TaskStatus
-from core.audio_profiles import get_profile, AudioFormat
-from ui.ascii_visualizer import AsciiVisualizer
-from ui.input_handler import SUPPORTED_VIDEO_EXTENSIONS, get_clipboard_files
+# Core processing components
+from processing.queue_manager import ConversionTask, QueueManager, TaskStatus
+from ui.input_handler import SUPPORTED_VIDEO_EXTENSIONS, get_clipboard_files, parse_input_paths
 
-class MonitorWidget(Static):
-    """A Textual widget that renders the AsciiVisualizer from Rich."""
-    
-    def on_mount(self) -> None:
-        self.visualizer = AsciiVisualizer()
-        self.start_time = time.time()
-        self.is_active = False
-        self.current_progress = 0.0
-        self.current_speed = 0.0
-        self.update_timer = self.set_interval(0.1, self.update_monitor)
+# Theme
+from ui.tui_theme import TUI_CSS, apply_tui_theme
 
-    def update_monitor(self) -> None:
-        elapsed = time.time() - self.start_time
-        # Render the rich table
-        renderable = self.visualizer.render_monitor_widget(
-            time_sec=elapsed,
-            progress=self.current_progress,
-            speed=self.current_speed,
-            is_active=self.is_active,
-            workers=4 if self.is_active else 0,
-            spectrum_height=5,
-            compact=False
-        )
-        self.update(renderable)
+# Widgets
+from ui.tui_widgets.queue_table import QueueTableWidget, TaskDetailsRequested
+from ui.tui_widgets.resource_monitor import ResourceMonitorWidget
+from ui.tui_widgets.status_bar import TUIStatusBar
+from ui.tui_widgets.visualizer_widget import AudioVisualizerWidget, VisualizerMode
+
+# Screens & Modals
+from ui.tui_screens.file_picker import FilePickerModal
+from ui.tui_screens.filter_dialog import FilterDialogModal
+from ui.tui_screens.help_screen import HelpModalScreen
+from ui.tui_screens.history_screen import HistoryModalScreen
+from ui.tui_screens.preset_dialog import PresetDialogModal
+
 
 class TranscoderTUI(App):
-    """Advanced Textual TUI for Video to Audio Transcoder."""
-    
-    CSS = """
+    """
+    Enterprise Textual TUI Application for Video to Audio Transcoding.
+    Sleek, minimalist dark monochrome interface with complete mouse and keyboard ergonomics.
+    """
+
+    CSS = TUI_CSS + """
     Screen {
-        background: $surface-darken-2;
+        background: #0d0f14;
+        color: #e1e4ec;
+        layout: vertical;
     }
-    
+
+    #app-body {
+        layout: horizontal;
+        height: 1fr;
+        width: 100%;
+    }
+
     #sidebar {
-        width: 20;
+        width: 22;
         dock: left;
-        padding: 1;
-        background: $surface-darken-1;
-        border-right: vkey $background-lighten-1;
+        padding: 1 1;
+        background: #10121a;
+        border-right: solid #1b1f2b;
     }
-    
+
+    #sidebar-title {
+        text-align: center;
+        text-style: bold;
+        color: #e1e4ec;
+        margin-bottom: 1;
+        border-bottom: solid #1b1f2b;
+        padding-bottom: 1;
+    }
+
     #sidebar Button {
         width: 100%;
         margin-bottom: 1;
-        background: $surface;
-        color: $text;
-        border: none;
+        background: #141722;
+        color: #9aa2b4;
+        border: solid #1b1f2b;
+        height: 3;
     }
-    
+
     #sidebar Button:hover {
-        background: $primary;
-        color: $text-muted;
+        background: #1d2332;
+        color: #ffffff;
+        border: solid #3d5470;
     }
-    
-    #main-content {
-        layout: vertical;
+
+    #center-pane {
+        width: 5fr;
         height: 100%;
+        layout: vertical;
+        padding: 0 1;
     }
-    
-    #top-row {
+
+    #queue-wrapper {
+        height: 2fr;
+        border: round #242938;
+        background: #13161f;
+        margin-bottom: 1;
+    }
+
+    #queue-wrapper:focus-within {
+        border: round #3d5470;
+    }
+
+    #log-wrapper {
         height: 1fr;
-        layout: horizontal;
+        border: round #242938;
+        background: #13161f;
     }
-    
-    #queue-container {
+
+    #log-wrapper:focus-within {
+        border: round #3d5470;
+    }
+
+    #right-pane {
         width: 3fr;
         height: 100%;
-        border-right: vkey $background-lighten-1;
-        background: $surface-darken-2;
+        layout: vertical;
+        padding: 0 1 0 0;
     }
-    
-    #monitor-container {
-        width: 2fr;
+
+    #telemetry-wrapper {
+        height: 14;
+        border: round #242938;
+        background: #13161f;
+        margin-bottom: 1;
+        padding: 0 1;
+    }
+
+    #visualizer-wrapper {
+        height: 1fr;
+        border: round #242938;
+        background: #13161f;
+        padding: 0 1;
+    }
+
+    #event-log {
         height: 100%;
-        padding: 1;
-        background: $surface-darken-2;
-    }
-    
-    #log-container {
-        height: 10;
-        border-top: hkey $background-lighten-1;
-        background: $surface-darken-2;
-        dock: bottom;
-    }
-    
-    DataTable {
-        height: 100%;
-        background: $surface-darken-2;
+        background: transparent;
+        color: #9aa2b4;
     }
     """
 
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("a", "add_files", "Add Files (Clipboard)"),
-        ("s", "toggle_start", "Start/Pause"),
+        Binding("q", "quit", "Quit", show=True, key_display="q"),
+        Binding("b", "browse_files", "Browse Files", show=True, key_display="b"),
+        Binding("a", "browse_files", "Add Files", show=False),
+        Binding("v", "paste_clipboard", "Paste", show=True, key_display="v"),
+        Binding("s", "toggle_start", "Start/Pause", show=True, key_display="s"),
+        Binding("p", "open_presets", "Presets", show=True, key_display="p"),
+        Binding("f", "open_filters", "Filters", show=True, key_display="f"),
+        Binding("h", "open_history", "History", show=True, key_display="h"),
+        Binding("question_mark", "open_help", "Help", show=True, key_display="?"),
+        Binding("c", "clear_completed", "Clear Done", show=False),
+        Binding("m", "cycle_visualizer", "Visualizer Mode", show=False),
     ]
 
-    def __init__(self, initial_paths: List[Path] = None):
+    def __init__(self, initial_paths: Optional[List[Path]] = None):
         super().__init__()
         self.queue_manager = QueueManager()
         self.queue_manager.pause_queue()
         self.initial_paths = initial_paths or []
-        self.current_format = "mp3"
-        self.current_options = {"bitrate": "320k"}
-        
+
+        # Active configuration
+        self.current_format: str = "mp3"
+        self.current_bitrate: str = "320k"
+        self.current_options: Dict[str, Any] = {
+            "bitrate": "320k",
+            "preserve_cover_art": True,
+            "ebu_r128": False,
+            "lossless_copy_if_match": False,
+        }
+
         # Wire queue callbacks
         self.queue_manager.on_task_started = self._on_task_started
         self.queue_manager.on_task_progress = self._on_task_progress
@@ -130,172 +195,295 @@ class TranscoderTUI(App):
         self.queue_manager.on_queue_completed = self._on_queue_completed
 
     def compose(self) -> ComposeResult:
-        """Create child widgets for the app."""
-        yield Header(show_clock=True)
-        
-        with Container(id="sidebar"):
-            yield Label("TRANSCODER", id="app-title", classes="text-bold text-center")
-            yield Button("Paste Files", id="btn-add")
-            yield Button("Start", id="btn-start")
-            yield Button("Pause", id="btn-pause", disabled=True)
-            yield Button("Clear Done", id="btn-clear")
-            yield Button("Quit", id="btn-quit")
-            
-        with Container(id="main-content"):
-            with Horizontal(id="top-row"):
-                with Container(id="queue-container"):
-                    yield DataTable(id="queue-table")
-                with Container(id="monitor-container"):
-                    yield MonitorWidget(id="monitor")
-            with Container(id="log-container"):
-                yield RichLog(id="event-log", highlight=False, markup=True)
-                
+        """Compose child widgets in responsive layout."""
+        yield Header(show_clock=False)
+
+        with Horizontal(id="app-body"):
+            # 1. Left Sidebar
+            with Container(id="sidebar"):
+                yield Label("TRANSCODER", id="sidebar-title")
+                yield Button("Browse Files (b)", id="btn-browse")
+                yield Button("Paste Files (v)", id="btn-paste")
+                yield Button("Start Batch (s)", id="btn-start")
+                yield Button("Pause Queue", id="btn-pause", disabled=True)
+                yield Button("Presets (p)", id="btn-presets")
+                yield Button("DSP Filters (f)", id="btn-filters")
+                yield Button("History (h)", id="btn-history")
+                yield Button("Clear Done (c)", id="btn-clear")
+                yield Button("Help (?)", id="btn-help")
+                yield Button("Quit (q)", id="btn-quit")
+
+            # 2. Center Column: Queue Table + Event Log
+            with Vertical(id="center-pane"):
+                with Container(id="queue-wrapper"):
+                    yield QueueTableWidget(
+                        queue_manager=self.queue_manager,
+                        show_header=True,
+                        show_footer=True,
+                        id="queue-table-widget",
+                    )
+                with Container(id="log-wrapper"):
+                    yield RichLog(id="event-log", highlight=False, markup=True)
+
+            # 3. Right Column: Telemetry + Audio Visualizer
+            with Vertical(id="right-pane"):
+                with Container(id="telemetry-wrapper"):
+                    yield ResourceMonitorWidget(
+                        queue_manager=self.queue_manager,
+                        id="resource-monitor",
+                    )
+                with Container(id="visualizer-wrapper"):
+                    yield AudioVisualizerWidget(
+                        queue_manager=self.queue_manager,
+                        id="audio-visualizer",
+                    )
+
+        # 4. Bottom Status Bar & Keybinding Footer
+        yield TUIStatusBar(id="status-bar")
         yield Footer()
 
     def on_mount(self) -> None:
-        """Called when app starts."""
+        """Called once the app is mounted."""
         self.title = "Neural Transcode Matrix"
-        self.sub_title = "Minimal Workspace"
-        
-        table = self.query_one("#queue-table", DataTable)
-        table.add_columns("ID", "Status", "Filename", "Target", "Progress", "Speed")
-        
+        self.sub_title = "Enterprise Video-to-Audio Transcoder"
+
+        apply_tui_theme(self)
+
+        status_bar = self.query_one("#status-bar", TUIStatusBar)
+        status_bar.set_status("READY")
+        self._update_preset_status_badge()
+
         log = self.query_one("#event-log", RichLog)
-        log.write("[dim]System Initialized. Awaiting operations...[/]")
-        
+        tstamp = time.strftime("%H:%M:%S")
+        log.write(f"[dim]{tstamp}[/] [white]Enterprise Transcoder initialized.[/] Ready for operations.")
+
+        # If user passed initial files via CLI, stage them
         if self.initial_paths:
-            self._add_paths(self.initial_paths)
-            
-        self.set_interval(0.5, self.refresh_table)
+            self._stage_paths(self.initial_paths)
 
-    def action_add_files(self) -> None:
-        self.on_button_pressed(Button.Pressed(self.query_one("#btn-add", Button)))
-        
-    def action_toggle_start(self) -> None:
-        if self.query_one("#btn-start", Button).disabled:
-            self.on_button_pressed(Button.Pressed(self.query_one("#btn-pause", Button)))
+        # Timer to keep status bar synchronized with queue
+        self.set_interval(0.5, self._sync_telemetry)
+
+    # =========================================================================
+    # User Actions & Keybindings
+    # =========================================================================
+
+    def action_browse_files(self) -> None:
+        """Opens the interactive FilePickerModal."""
+        def on_files_picked(selected_paths: Optional[List[Path]]) -> None:
+            if selected_paths:
+                self._stage_paths(selected_paths)
+
+        self.push_screen(FilePickerModal(), on_files_picked)
+
+    def action_paste_clipboard(self) -> None:
+        """Pastes video files or folder paths from system clipboard."""
+        paths = get_clipboard_files()
+        if paths:
+            self._stage_paths(paths)
         else:
-            self.on_button_pressed(Button.Pressed(self.query_one("#btn-start", Button)))
+            self._notify("No valid video files found in clipboard.", level="warning")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Event handler for button presses."""
-        btn_id = event.button.id
-        if btn_id == "btn-quit":
-            self.exit()
-        elif btn_id == "btn-add":
-            paths = get_clipboard_files()
-            if paths:
-                self._add_paths(paths)
-                self.query_one("#event-log", RichLog).write(f"[dim]Added {len(paths)} files from clipboard.[/]")
-            else:
-                self.query_one("#event-log", RichLog).write("[dim]No valid video files found in clipboard.[/]")
-        elif btn_id == "btn-start":
+    def action_toggle_start(self) -> None:
+        """Toggles between starting and pausing queue execution."""
+        stats = self.queue_manager.get_stats()
+        if not stats.is_running or self.queue_manager._pause_event.is_set():
+            # Start / Resume
             self.queue_manager.resume_queue()
             self.query_one("#btn-start", Button).disabled = True
             self.query_one("#btn-pause", Button).disabled = False
-            self.query_one("#event-log", RichLog).write("[dim]Conversion Started.[/]")
-        elif btn_id == "btn-pause":
+            self.query_one("#status-bar", TUIStatusBar).set_status("CONVERTING")
+            self._notify("Queue processing started.", level="info")
+            self._log("Queue processing resumed.", "white")
+        else:
+            # Pause
             self.queue_manager.pause_queue()
             self.query_one("#btn-start", Button).disabled = False
             self.query_one("#btn-pause", Button).disabled = True
-            self.query_one("#event-log", RichLog).write("[dim]Conversion Paused.[/]")
+            self.query_one("#status-bar", TUIStatusBar).set_status("PAUSED")
+            self._notify("Queue paused.", level="warning")
+            self._log("Queue paused by user.", "dim")
+
+    def action_open_presets(self) -> None:
+        """Opens the PresetDialogModal."""
+        def on_preset_selected(result: Optional[Dict[str, Any]]) -> None:
+            if result:
+                self.current_format = result.get("format", "mp3")
+                self.current_bitrate = result.get("bitrate", "320k")
+                if "options" in result:
+                    self.current_options.update(result["options"])
+                self.current_options["bitrate"] = self.current_bitrate
+                self._update_preset_status_badge()
+                self._notify(f"Preset updated: {self.current_format.upper()} ({self.current_bitrate})", level="success")
+                self._log(f"Profile set to {self.current_format.upper()} ({self.current_bitrate})", "white")
+
+        self.push_screen(PresetDialogModal(), on_preset_selected)
+
+    def action_open_filters(self) -> None:
+        """Opens the FilterDialogModal."""
+        def on_filters_selected(options: Optional[Dict[str, Any]]) -> None:
+            if options:
+                self.current_options.update(options)
+                self._update_preset_status_badge()
+                norm_str = "EBU R128" if options.get("ebu_r128") else "Standard"
+                copy_str = "Copy" if options.get("lossless_copy_if_match") else "Encode"
+                self._notify(f"Filters updated: {norm_str} | {copy_str}", level="info")
+                self._log(f"DSP filters updated: {options}", "dim")
+
+        self.push_screen(FilterDialogModal(current_options=self.current_options), on_filters_selected)
+
+    def action_open_history(self) -> None:
+        """Opens the HistoryModalScreen."""
+        self.push_screen(HistoryModalScreen(queue_manager=self.queue_manager))
+
+    def action_open_help(self) -> None:
+        """Opens the HelpModalScreen."""
+        self.push_screen(HelpModalScreen())
+
+    def action_clear_completed(self) -> None:
+        """Clears completed and cancelled tasks from queue."""
+        self.queue_manager.clear_queue(cancel_active=False)
+        self.query_one("#queue-table-widget", QueueTableWidget).refresh_tasks()
+        self._notify("Cleared completed tasks.", level="info")
+
+    def action_cycle_visualizer(self) -> None:
+        """Cycles audio visualizer modes."""
+        vis = self.query_one("#audio-visualizer", AudioVisualizerWidget)
+        vis.action_cycle_mode()
+
+    # =========================================================================
+    # Button Event Handlers
+    # =========================================================================
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        btn_id = event.button.id
+        if btn_id == "btn-browse":
+            self.action_browse_files()
+        elif btn_id == "btn-paste":
+            self.action_paste_clipboard()
+        elif btn_id == "btn-start":
+            self.action_toggle_start()
+        elif btn_id == "btn-pause":
+            self.action_toggle_start()
+        elif btn_id == "btn-presets":
+            self.action_open_presets()
+        elif btn_id == "btn-filters":
+            self.action_open_filters()
+        elif btn_id == "btn-history":
+            self.action_open_history()
         elif btn_id == "btn-clear":
-            self.queue_manager.clear_queue(cancel_active=False)
-            self.refresh_table()
-            self.query_one("#event-log", RichLog).write("[dim]Cleared completed tasks.[/]")
+            self.action_clear_completed()
+        elif btn_id == "btn-help":
+            self.action_open_help()
+        elif btn_id == "btn-quit":
+            self.exit()
 
-    def _add_paths(self, paths: List[Path]) -> None:
+    # =========================================================================
+    # Helper Methods
+    # =========================================================================
+
+    def _stage_paths(self, paths: List[Path]) -> None:
+        """Stages video files into QueueManager."""
+        added = 0
         for p in paths:
-            self.queue_manager.add_task(
-                source_file=p,
-                target_format=self.current_format,
-                options=self.current_options
-            )
-        self.refresh_table()
-
-    def refresh_table(self) -> None:
-        try:
-            table = self.query_one("#queue-table", DataTable)
-            table.clear()
-            
-            tasks = self.queue_manager.get_all_tasks()
-            
-            # Update monitor status based on active tasks
-            monitor = self.query_one("#monitor", MonitorWidget)
-            active_task = None
-            
-            for i, task in enumerate(tasks):
-                status_str = f"[{task.status.value}]"
-                if task.status == TaskStatus.CONVERTING:
-                    status_str = f"[white]{status_str}[/]"
-                    active_task = task
-                elif task.status == TaskStatus.COMPLETED:
-                    status_str = f"[dim white]{status_str}[/]"
-                elif task.status == TaskStatus.FAILED:
-                    status_str = f"[dim]{status_str}[/]"
-                elif task.status == TaskStatus.PROBING:
-                    status_str = f"[dim]{status_str}[/]"
-                else:
-                    status_str = f"[dim]{status_str}[/]"
-
-                fname = task.source_file.name
-                if len(fname) > 30:
-                    fname = fname[:27] + "..."
-                    
-                prog = f"{task.progress:.1f}%"
-                spd = task.speed
-                
-                table.add_row(
-                    str(i+1),
-                    Text.from_markup(status_str),
-                    fname,
-                    task.target_format.upper(),
-                    prog,
-                    spd
+            if p.is_file() and p.suffix.lower() in SUPPORTED_VIDEO_EXTENSIONS:
+                self.queue_manager.add_task(
+                    source_file=p,
+                    target_format=self.current_format,
+                    options=dict(self.current_options),
                 )
-                
-            if active_task:
-                monitor.is_active = True
-                monitor.current_progress = active_task.progress
-                try:
-                    monitor.current_speed = float(active_task.speed.replace("x", ""))
-                except:
-                    monitor.current_speed = 1.0
-            else:
-                monitor.is_active = False
-                
-        except NoMatches:
+                added += 1
+            elif p.is_dir():
+                discovered = parse_input_paths(str(p), recursive=True)
+                for f in discovered:
+                    self.queue_manager.add_task(
+                        source_file=f,
+                        target_format=self.current_format,
+                        options=dict(self.current_options),
+                    )
+                    added += 1
+
+        if added > 0:
+            self.query_one("#queue-table-widget", QueueTableWidget).refresh_tasks()
+            self._notify(f"Staged {added} video file(s) for conversion.", level="success")
+            self._log(f"Added {added} file(s) to conversion batch.", "white")
+        else:
+            self._notify("No supported video files discovered.", level="warning")
+
+    def _update_preset_status_badge(self) -> None:
+        """Updates preset label on status bar."""
+        try:
+            status_bar = self.query_one("#status-bar", TUIStatusBar)
+            loudnorm_flag = " | EBU R128" if self.current_options.get("ebu_r128") else ""
+            status_bar.set_preset(f"{self.current_format.upper()} {self.current_bitrate}{loudnorm_flag}")
+        except Exception:
             pass
 
-    # Callbacks from QueueManager (executed in worker threads, use call_from_thread)
-    def _on_task_started(self, task: ConversionTask):
-        self.call_from_thread(self._log_event, f"Started: {task.source_file.name}", "dim")
-        
-    def _on_task_progress(self, task: ConversionTask, snap: Any):
-        pass # Handled by interval
-        
-    def _on_task_completed(self, task: ConversionTask, ver: Any):
-        self.call_from_thread(self._log_event, f"Completed: {task.source_file.name}", "dim white")
-        
-    def _on_task_failed(self, task: ConversionTask, err: str):
-        self.call_from_thread(self._log_event, f"Failed: {task.source_file.name} - {err}", "dim")
-        
-    def _on_queue_completed(self, stats: Any):
-        self.call_from_thread(self._on_queue_done)
-        
-    def _on_queue_done(self):
-        self.query_one("#btn-start", Button).disabled = False
-        self.query_one("#btn-pause", Button).disabled = True
-        self.query_one("#event-log", RichLog).write("[dim]Batch Queue Completed.[/]")
+    def _sync_telemetry(self) -> None:
+        """Keeps status bar state in sync with QueueManager."""
+        try:
+            stats = self.queue_manager.get_stats()
+            status_bar = self.query_one("#status-bar", TUIStatusBar)
+            vis = self.query_one("#audio-visualizer", AudioVisualizerWidget)
 
-    def _log_event(self, msg: str, color: str = "dim"):
+            if stats.active_tasks > 0:
+                status_bar.set_status("CONVERTING", current=stats.completed_tasks, total=stats.total_tasks)
+                vis.is_active = True
+            elif stats.total_tasks > 0 and stats.pending_tasks == 0 and stats.active_tasks == 0:
+                status_bar.set_status("ALL DONE")
+                vis.is_active = False
+            elif self.queue_manager._pause_event.is_set():
+                status_bar.set_status("PAUSED")
+                vis.is_active = False
+            else:
+                status_bar.set_status("READY")
+                vis.is_active = False
+        except Exception:
+            pass
+
+    def _notify(self, message: str, level: str = "info") -> None:
+        """Posts a clean transient message to status bar."""
+        try:
+            self.query_one("#status-bar", TUIStatusBar).notify_status(message, level=level, duration=4.0)
+        except Exception:
+            pass
+
+    def _log(self, message: str, color: str = "dim") -> None:
+        """Writes timestamped entry to event log."""
         try:
             log = self.query_one("#event-log", RichLog)
             tstamp = time.strftime("%H:%M:%S")
-            log.write(f"[dim]{tstamp} {msg}[/]")
-        except NoMatches:
+            log.write(f"[dim]{tstamp}[/] [{color}]{message}[/]")
+        except Exception:
             pass
 
-def run_textual_app(initial_paths: List[Path] = None):
+    # =========================================================================
+    # QueueManager Background Thread Callbacks
+    # =========================================================================
+
+    def _on_task_started(self, task: ConversionTask) -> None:
+        self.call_from_thread(self._log, f"Started: {task.source_file.name}", "white")
+
+    def _on_task_progress(self, task: ConversionTask, snap: Any) -> None:
+        pass
+
+    def _on_task_completed(self, task: ConversionTask, ver: Any) -> None:
+        self.call_from_thread(self._log, f"Finished: {task.source_file.name}", "dim white")
+
+    def _on_task_failed(self, task: ConversionTask, err: str) -> None:
+        self.call_from_thread(self._log, f"Failed: {task.source_file.name} - {err}", "dim")
+
+    def _on_queue_completed(self, stats: Any) -> None:
+        self.call_from_thread(self._on_queue_done)
+
+    def _on_queue_done(self) -> None:
+        self.query_one("#btn-start", Button).disabled = False
+        self.query_one("#btn-pause", Button).disabled = True
+        self._notify("Batch queue completed.", level="success")
+        self._log("All tasks completed.", "white")
+
+
+def run_textual_app(initial_paths: Optional[List[Path]] = None) -> None:
+    """Launches the master Textual TUI Application."""
     app = TranscoderTUI(initial_paths)
     app.run()
