@@ -189,3 +189,118 @@ async def test_modal_format_switching_and_description():
         assert sel["format"] == "opus"
         assert sel["codec"] == "libopus"
         assert sel["lossless"] is False
+
+
+@pytest.mark.asyncio
+async def test_modal_layout_geometry_and_80x24_bounds():
+    """Verify that the preset dialog conforms to 80x24 terminal bounds with balanced columns and height-3 buttons."""
+    class TestApp(App):
+        def on_mount(self):
+            self.push_screen(PresetDialogModal())
+
+    app = TestApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        modal = app.screen
+        assert isinstance(modal, PresetDialogModal)
+
+        box = modal.query_one("#preset-dialog-box")
+        col_format = modal.query_one("#col-format")
+        col_quality = modal.query_one("#col-quality")
+        desc_panel = modal.query_one("#desc-panel")
+        btn_cancel = modal.query_one("#btn-cancel")
+        btn_apply = modal.query_one("#btn-apply")
+        shortcuts = modal.query_one("#dialog-shortcuts")
+
+        # 1. Compact container bounds - never overflows 80x24
+        assert box.region.width <= 80, f"Box width {box.region.width} exceeds 80"
+        assert box.region.height <= 24, f"Box height {box.region.height} exceeds 24"
+        assert box.region.height == 22, f"Box height {box.region.height} should be exactly 22"
+        assert not box.show_vertical_scrollbar
+        assert not modal.show_vertical_scrollbar
+
+        # 2. Balanced 2-column layout
+        assert col_format.region.height == 10
+        assert col_quality.region.height == 10
+        assert col_format.region.y == col_quality.region.y
+        assert col_format.region.width > 0
+        assert col_quality.region.width > 0
+
+        # 3. Live description panel below columns
+        assert desc_panel.region.y >= col_format.region.y + col_format.region.height
+        assert desc_panel.region.height == 5
+
+        # 4. Action buttons at bottom: height 3, flat, aligned shortcuts
+        assert btn_cancel.region.height == 3
+        assert btn_apply.region.height == 3
+        assert btn_cancel.region.y == btn_apply.region.y == shortcuts.region.y
+        assert "Esc: Cancel" in str(shortcuts.render())
+        assert "Enter: Apply" in str(shortcuts.render())
+
+
+@pytest.mark.asyncio
+async def test_modal_keyboard_enter_and_escape():
+    """Verify that Enter and Escape keyboard shortcuts trigger apply and cancel immediately."""
+    applied_result = []
+    dismissed_result = []
+
+    class ApplyApp(App):
+        def on_mount(self):
+            def on_dismiss(res):
+                applied_result.append(res)
+                self.exit()
+            self.push_screen(PresetDialogModal(initial_format="mp3"), on_dismiss)
+
+    app = ApplyApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+
+    assert len(applied_result) == 1
+    assert applied_result[0] is not None
+    assert applied_result[0]["format"] == "mp3"
+
+    class CancelApp(App):
+        def on_mount(self):
+            def on_dismiss(res):
+                dismissed_result.append(res)
+                self.exit()
+            self.push_screen(PresetDialogModal(initial_format="flac"), on_dismiss)
+
+    app2 = CancelApp()
+    async with app2.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        await pilot.press("escape")
+        await pilot.pause()
+
+    assert len(dismissed_result) == 1
+    assert dismissed_result[0] is None
+
+
+@pytest.mark.asyncio
+async def test_modal_format_switching_geometric_stability():
+    """Verify that switching between all 7 formats preserves exact geometric stability without height jitter."""
+    class TestApp(App):
+        def on_mount(self):
+            self.push_screen(PresetDialogModal())
+
+    app = TestApp()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await pilot.pause()
+        modal = app.screen
+        box = modal.query_one("#preset-dialog-box")
+        col_format = modal.query_one("#col-format")
+        col_quality = modal.query_one("#col-quality")
+
+        for fmt in FORMAT_REGISTRY:
+            modal.current_format = fmt
+            modal._update_quality_set_visibility()
+            modal._update_description()
+            await pilot.pause()
+
+            assert box.region.height == 22
+            assert col_format.region.height == 10
+            assert col_quality.region.height == 10
+            assert not modal.show_vertical_scrollbar
+

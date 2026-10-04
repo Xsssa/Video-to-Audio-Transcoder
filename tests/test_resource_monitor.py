@@ -161,6 +161,74 @@ class TestMonochromeRenderers(unittest.TestCase):
         panel = render_resource_monitor_panel(snapshot, safe_ascii=False)
         self.assertIsInstance(panel, Panel)
 
+    def test_telemetry_table_rows_and_labels_consistency(self):
+        """
+        Verify the 5 required telemetry rows:
+        - Row 1: CPU core usage with sparkline and percentage.
+        - Row 2: RAM usage with progress bar and GB ratio.
+        - Row 3: Active workers / concurrency bar.
+        - Row 4: GPU acceleration status.
+        - Row 5: FFmpeg binary status.
+        Ensure consistent column widths and no_wrap on both columns.
+        """
+        snapshot = ResourceTelemetrySnapshot(
+            cpu_percent_overall=42.5,
+            cpu_per_core=[10.0, 30.0, 60.0, 90.0],
+            ram_used_gb=8.5,
+            ram_total_gb=32.0,
+            ram_percent=26.5,
+            active_workers=3,
+            max_workers=6,
+            gpu_info=GpuInfo(available=True, engine="NVIDIA NVENC", status_text="GPU: Auto-Accelerated (NVIDIA NVENC)"),
+            ffmpeg_info=FFmpegInfo(is_ok=True, path="C:\\ffmpeg\\ffmpeg.exe", version="6.1.1"),
+        )
+
+        table_wide = render_resource_monitor_table(snapshot, compact=False, width=80)
+        self.assertEqual(len(table_wide.rows), 5)
+
+        # Check column properties
+        col_metric, col_value = table_wide.columns
+        self.assertTrue(col_metric.no_wrap)
+        self.assertEqual(col_metric.width, 11)
+        self.assertTrue(col_value.no_wrap)
+        self.assertEqual(col_value.overflow, "ellipsis")
+
+        # Check compact mode column properties
+        table_compact = render_resource_monitor_table(snapshot, compact=True, width=35)
+        self.assertEqual(len(table_compact.rows), 5)
+        c_metric, c_value = table_compact.columns
+        self.assertTrue(c_metric.no_wrap)
+        self.assertEqual(c_metric.width, 8)
+        self.assertTrue(c_value.no_wrap)
+        self.assertEqual(c_value.overflow, "ellipsis")
+
+    def test_narrow_panel_rendering(self):
+        """Verify rendering at narrow widths (30, 35, 40) executes without errors."""
+        snapshot = ResourceTelemetrySnapshot(
+            cpu_percent_overall=35.0,
+            cpu_per_core=[20.0, 40.0, 60.0, 80.0, 30.0, 50.0, 70.0, 90.0],
+            ram_used_gb=12.0,
+            ram_total_gb=32.0,
+            ram_percent=37.5,
+            active_workers=2,
+            max_workers=4,
+            gpu_info=GpuInfo(available=True, engine="NVIDIA NVENC", status_text="NVIDIA NVENC"),
+            ffmpeg_info=FFmpegInfo(is_ok=True, path="ffmpeg.exe", version="6.1"),
+        )
+
+        for w in [30, 35, 40]:
+            panel = render_resource_monitor_panel(snapshot, width=w)
+            self.assertIsInstance(panel, Panel)
+            # Narrow panels should use compact title
+            if w < 40:
+                self.assertIn("SYSTEM TELEMETRY", str(panel.title))
+
+    def test_panel_border_styling_slate_dark_theme(self):
+        """Verify panel border matches global dark slate theme (#242938)."""
+        snapshot = ResourceTelemetrySnapshot()
+        panel = render_resource_monitor_panel(snapshot)
+        self.assertEqual(panel.border_style, "#242938")
+
 
 class TestTextualResourceMonitorWidget(unittest.TestCase):
     """Tests for Textual lifecycle, background timer, and widget methods."""

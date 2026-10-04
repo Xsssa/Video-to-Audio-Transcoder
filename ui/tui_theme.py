@@ -179,7 +179,7 @@ TUI_CSS: str = """
    Inspired by: lazygit, btop, neovim, k9s
    ========================================================================= */
 
-/* --- 1. Global Reset & Root Screen --- */
+/* --- 1. Global Reset, Root Screen & Scrollbars --- */
 Screen {
     background: #0d0f14;
     color: #e1e4ec;
@@ -190,8 +190,16 @@ Screen:focus {
     background: #0d0f14;
 }
 
-/* Slim Minimalist Scrollbars */
 * {
+    scrollbar-background: #10121a;
+    scrollbar-color: #242938;
+    scrollbar-color-hover: #3d5470;
+    scrollbar-color-active: #4ba3be;
+    scrollbar-size: 1 1;
+    scrollbar-corner-color: #10121a;
+}
+
+VerticalScroll, HorizontalScroll, ScrollableContainer, DataTable, RichLog, DirectoryTree, ListView, OptionList {
     scrollbar-background: #10121a;
     scrollbar-color: #242938;
     scrollbar-color-hover: #3d5470;
@@ -199,7 +207,7 @@ Screen:focus {
     scrollbar-size: 1 1;
 }
 
-/* --- 2. Header & Footer Bars --- */
+/* --- 2. Header, Footer & Status Bar --- */
 Header {
     dock: top;
     height: 1;
@@ -238,7 +246,181 @@ FooterKey:hover {
     color: #ffffff;
 }
 
-/* --- 3. Sidebar & Navigation Column --- */
+/* Bottom Status Bar */
+TUIStatusBar {
+    dock: bottom;
+    height: 1;
+    min-height: 1;
+    max-height: 1;
+    width: 100%;
+    layout: horizontal;
+    background: #10121a;
+    color: #9aa2b4;
+    overflow: hidden hidden;
+}
+
+#status-bar-left {
+    width: auto;
+    max-width: 45%;
+    height: 1;
+    content-align: left middle;
+    padding-left: 1;
+    padding-right: 1;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden hidden;
+}
+
+#status-bar-center {
+    width: 1fr;
+    min-width: 0;
+    height: 1;
+    content-align: center middle;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden hidden;
+    padding-left: 1;
+    padding-right: 1;
+}
+
+#status-bar-right {
+    width: auto;
+    max-width: 45%;
+    height: 1;
+    content-align: right middle;
+    padding-left: 1;
+    padding-right: 1;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden hidden;
+}
+
+/* --- 3. Unified Buttons --- */
+Button {
+    height: 3;
+    min-height: 3;
+    min-width: 10;
+    padding: 0 2;
+    background: #181c28;
+    color: #9aa2b4;
+    border: solid #242938;
+    text-style: none;
+}
+
+Button:hover {
+    background: #222a3d;
+    color: #ffffff;
+    border: solid #3d5470;
+}
+
+Button:focus {
+    background: #242d40;
+    color: #ffffff;
+    border: solid #4ba3be;
+    text-style: bold;
+}
+
+Button.-active, Button.active {
+    background: #2a354d;
+    color: #5cbcdb;
+    border: solid #4ba3be;
+}
+
+Button:disabled {
+    background: #11131c;
+    color: #484f60;
+    border: solid #1b1f2b;
+    text-style: none;
+}
+
+/* Button Variants */
+Button.-primary, Button.primary, Button.action-btn, #btn-apply, #btn-save, #btn-select {
+    background: #1c3340;
+    color: #5cbcdb;
+    border: solid #2c5468;
+}
+
+Button.-primary:hover, Button.primary:hover, Button.action-btn:hover, #btn-apply:hover, #btn-save:hover, #btn-select:hover {
+    background: #244456;
+    color: #ffffff;
+    border: solid #4ba3be;
+}
+
+Button.-primary:focus, Button.primary:focus, Button.action-btn:focus, #btn-apply:focus, #btn-save:focus, #btn-select:focus {
+    background: #284c60;
+    color: #ffffff;
+    border: solid #5cbcdb;
+}
+
+Button.-success, Button.success {
+    background: #192b1e;
+    color: #72a37d;
+    border: solid #274530;
+}
+
+Button.-success:hover, Button.success:hover {
+    background: #223c2a;
+    color: #ffffff;
+    border: solid #72a37d;
+}
+
+Button.-error, Button.-danger, Button.error, Button.danger {
+    background: #2c1a1d;
+    color: #b36262;
+    border: solid #4a282d;
+}
+
+Button.-error:hover, Button.-danger:hover, Button.error:hover, Button.danger:hover {
+    background: #3e2227;
+    color: #ffffff;
+    border: solid #b36262;
+}
+
+Button.-warning, Button.warning {
+    background: #282218;
+    color: #b5935d;
+    border: solid #453823;
+}
+
+Button.-warning:hover, Button.warning:hover {
+    background: #382e1e;
+    color: #ffffff;
+    border: solid #b5935d;
+}
+
+/* Neutral Dismiss & Cancel Buttons */
+#btn-cancel, #btn-close, #btn-close-modal, #btn-close-bottom, Button.dismiss-btn {
+    background: #181c28;
+    color: #9aa2b4;
+    border: solid #242938;
+}
+
+#btn-cancel:hover, #btn-close:hover, #btn-close-modal:hover, #btn-close-bottom:hover, Button.dismiss-btn:hover {
+    background: #222a3d;
+    color: #e1e4ec;
+    border: solid #3d5470;
+}
+
+/* Flat, Toolbar, Nav, and Filter Buttons */
+Button.flat-btn, .nav-btn, .drive-btn, .side-btn, .filter-btn {
+    background: #151824;
+    color: #9aa2b4;
+    border: none;
+    padding: 0 1;
+}
+
+Button.flat-btn:hover, .nav-btn:hover, .drive-btn:hover, .side-btn:hover, .filter-btn:hover {
+    background: #1d2332;
+    color: #e1e4ec;
+}
+
+Button.filter-btn.active, .filter-btn.-active, #filter-buttons Button.active {
+    background: #273142;
+    color: #5cbcdb;
+    border: solid #3d5470;
+}
+
+/* --- 4. Sidebar & Navigation Column --- */
 #sidebar, .sidebar {
     width: 24;
     dock: left;
@@ -267,8 +449,7 @@ FooterKey:hover {
     padding-left: 1;
 }
 
-/* Flat Sidebar Buttons with Subtle Hover */
-#sidebar Button, .sidebar Button, Button.flat-btn {
+#sidebar Button, .sidebar Button {
     width: 100%;
     height: 3;
     min-height: 3;
@@ -280,64 +461,30 @@ FooterKey:hover {
     padding: 0 1;
 }
 
-#sidebar Button:hover, .sidebar Button:hover, Button.flat-btn:hover {
+#sidebar Button:hover, .sidebar Button:hover {
     background: #1d2332;
     color: #e1e4ec;
 }
 
-#sidebar Button:focus, .sidebar Button:focus, Button.flat-btn:focus {
+#sidebar Button:focus, .sidebar Button:focus {
     background: #222a3d;
     color: #ffffff;
     text-style: bold;
     border-left: thick #4ba3be;
 }
 
-#sidebar Button.-active, .sidebar Button.-active, Button.flat-btn.-active {
+#sidebar Button.-active, .sidebar Button.-active {
     background: #2a354d;
     color: #5cbcdb;
 }
 
-#sidebar Button:disabled, .sidebar Button:disabled, Button.flat-btn:disabled {
+#sidebar Button:disabled, .sidebar Button:disabled {
     background: #11131c;
     color: #3b4252;
     border-left: none;
 }
 
-/* Button Variants */
-Button.-primary {
-    background: #1c3340;
-    color: #5cbcdb;
-    border: none;
-}
-
-Button.-primary:hover {
-    background: #244456;
-    color: #ffffff;
-}
-
-Button.-success {
-    background: #192b1e;
-    color: #72a37d;
-    border: none;
-}
-
-Button.-success:hover {
-    background: #223c2a;
-    color: #ffffff;
-}
-
-Button.-error {
-    background: #2c1a1d;
-    color: #b36262;
-    border: none;
-}
-
-Button.-error:hover {
-    background: #3e2227;
-    color: #ffffff;
-}
-
-/* --- 4. Main Layout Panels & Containers --- */
+/* --- 5. Main Layout Panels & Card Containers --- */
 #main-content {
     layout: vertical;
     height: 100%;
@@ -351,14 +498,28 @@ Button.-error:hover {
     margin-top: 0;
 }
 
-.panel, .card, .container-box, #queue-container, #monitor-container, #log-container {
+.panel, .card, .container-box, .column-box, #queue-container, #monitor-container, #log-container {
     background: #13161f;
     border: round #242938;
     padding: 0 1;
 }
 
-.panel:focus-within, #queue-container:focus-within, #monitor-container:focus-within, #log-container:focus-within {
+.panel:focus-within, .card:focus-within, .container-box:focus-within, #queue-container:focus-within, #monitor-container:focus-within, #log-container:focus-within {
     border: round #3d5470;
+}
+
+.card-elevated, .dialog-card {
+    background: #181c28;
+    border: round #364157;
+}
+
+.card-elevated:focus-within, .dialog-card:focus-within {
+    border: round #4f98b2;
+}
+
+.panel-subtle, .column-box, .option-row, .select-row {
+    background: #141722;
+    border: solid #1b1f2b;
 }
 
 #queue-container {
@@ -388,7 +549,7 @@ Button.-error:hover {
     border-bottom: solid #242938;
 }
 
-/* --- 5. DataTable Styling (Crisp, Borderless, Alternating) --- */
+/* --- 6. DataTable Styling (Crisp, Borderless, Alternating) --- */
 DataTable {
     background: #13161f;
     color: #c4cad6;
@@ -427,7 +588,7 @@ DataTable > .datatable--odd-row {
     background: #161924;
 }
 
-/* --- 6. Status Badges & Pill Labels --- */
+/* --- 7. Status Badges & Pill Labels --- */
 .badge {
     height: 1;
     padding: 0 1;
@@ -470,28 +631,28 @@ DataTable > .datatable--odd-row {
     color: #b5935d;
 }
 
-/* --- 7. Modal Dialogs & Shaded Popups --- */
-ModalScreen, .modal-backdrop {
+/* --- 8. Modal Dialogs & Shaded Popups --- */
+ModalScreen, .modal-backdrop, FilePickerModal, FilterDialogModal, HelpModalScreen, HistoryModalScreen, PresetDialogModal {
     align: center middle;
     background: rgba(8, 10, 14, 0.85);
 }
 
-.modal-dialog, .dialog-card, #dialog {
-    width: 64;
-    max-width: 90%;
+.modal-dialog, .dialog-card, #dialog, #picker-dialog, #filter-dialog-container, #help-dialog-container, #history-modal-dialog, #preset-dialog-box {
+    width: 78;
+    max-width: 95%;
     height: auto;
-    max-height: 85%;
+    max-height: 90%;
     background: #181c28;
     border: round #364157;
     padding: 1 2;
     layout: vertical;
 }
 
-.modal-dialog:focus-within, .dialog-card:focus-within {
+.modal-dialog:focus-within, .dialog-card:focus-within, #dialog:focus-within, #picker-dialog:focus-within, #filter-dialog-container:focus-within, #help-dialog-container:focus-within, #history-modal-dialog:focus-within, #preset-dialog-box:focus-within {
     border: round #4f98b2;
 }
 
-.dialog-title, .modal-title {
+.dialog-title, .modal-title, #dialog-title, #modal-title, #help-dialog-title {
     text-style: bold;
     color: #e1e4ec;
     text-align: center;
@@ -500,25 +661,31 @@ ModalScreen, .modal-backdrop {
     padding-bottom: 1;
 }
 
+.dialog-header, .modal-header, #dialog-header, #picker-header, #help-header, #history-modal-header {
+    border-bottom: solid #242938;
+    margin-bottom: 1;
+    padding-bottom: 1;
+}
+
 .dialog-body, .modal-content {
     margin-bottom: 1;
     color: #9aa2b4;
 }
 
-.dialog-footer, .dialog-actions {
+.dialog-footer, .dialog-actions, #dialog-footer, #button-row, #dialog-buttons {
     layout: horizontal;
     align-horizontal: right;
     height: 3;
     margin-top: 1;
 }
 
-.dialog-footer Button, .dialog-actions Button {
+.dialog-footer Button, .dialog-actions Button, #dialog-buttons Button, #button-row Button {
     margin-left: 1;
     min-width: 10;
     height: 3;
 }
 
-/* --- 8. Form Inputs & Interactive Controls --- */
+/* --- 9. Form Inputs & Interactive Controls --- */
 Input {
     background: #0f1118;
     border: solid #242938;
@@ -570,7 +737,7 @@ OptionList > .option-list--option-highlighted, ListItem:focus {
     color: #ffffff;
 }
 
-/* --- 9. Logs & Visual Telemetry --- */
+/* --- 10. Logs & Visual Telemetry --- */
 RichLog, #event-log {
     background: #10121a;
     color: #8b94a7;
@@ -591,7 +758,7 @@ ProgressBar > .progressbar--complete {
     color: #58aeca;
 }
 
-/* --- 10. Tabs and Switchers --- */
+/* --- 11. Tabs and Switchers --- */
 Tabs {
     background: #10121a;
     border-bottom: solid #1b1f2b;

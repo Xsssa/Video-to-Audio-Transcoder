@@ -27,10 +27,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from core.probe import AudioStreamInfo, MediaProbeResult
 from processing.queue_manager import ConversionTask, QueueManager, QueueStats, TaskStatus
 from ui.tui_widgets.queue_table import (
+    COLUMN_ALIGNMENTS,
     COLUMN_HEADERS,
     COLUMN_KEYS,
+    COLUMN_WIDTHS,
     QueueDataTable,
     QueueStatsHeader,
     QueueSummaryFooter,
@@ -319,6 +322,191 @@ class TestQueueTableComponents(unittest.TestCase):
 
         import asyncio
         asyncio.run(run_test())
+
+    def test_column_widths_and_alignments(self) -> None:
+        """Verifies balanced column widths and alignment configurations."""
+        self.assertEqual(len(COLUMN_WIDTHS), 8)
+        self.assertEqual(COLUMN_WIDTHS["col_num"], 5)       # Narrow (#)
+        self.assertEqual(COLUMN_WIDTHS["col_status"], 13)   # Narrow (Status)
+        self.assertIsNone(COLUMN_WIDTHS["col_filename"])    # Wide, responsive
+        self.assertEqual(COLUMN_WIDTHS["col_format"], 8)    # Compact (Format)
+        self.assertEqual(COLUMN_WIDTHS["col_size"], 11)     # Size
+        self.assertEqual(COLUMN_WIDTHS["col_progress"], 10) # Progress
+        self.assertEqual(COLUMN_WIDTHS["col_speed"], 9)     # Speed
+        self.assertEqual(COLUMN_WIDTHS["col_eta"], 9)       # ETA
+
+        self.assertEqual(COLUMN_ALIGNMENTS["col_num"], "right")
+        self.assertEqual(COLUMN_ALIGNMENTS["col_status"], "center")
+        self.assertEqual(COLUMN_ALIGNMENTS["col_filename"], "left")
+        self.assertEqual(COLUMN_ALIGNMENTS["col_format"], "center")
+        self.assertEqual(COLUMN_ALIGNMENTS["col_size"], "right")
+        self.assertEqual(COLUMN_ALIGNMENTS["col_progress"], "right")
+        self.assertEqual(COLUMN_ALIGNMENTS["col_speed"], "right")
+        self.assertEqual(COLUMN_ALIGNMENTS["col_eta"], "center")
+
+        class TableWidthApp(App):
+            def compose(self) -> ComposeResult:
+                yield QueueDataTable(id="queue-data-table")
+
+        app = TableWidthApp()
+
+        async def run_test() -> None:
+            async with app.run_test() as pilot:
+                table = app.query_one(QueueDataTable)
+                from textual.widgets.data_table import ColumnKey
+                self.assertEqual(table.columns[ColumnKey("col_num")].width, 5)
+                self.assertFalse(table.columns[ColumnKey("col_num")].auto_width)
+                self.assertEqual(table.columns[ColumnKey("col_status")].width, 13)
+                self.assertTrue(table.columns[ColumnKey("col_filename")].auto_width)
+                self.assertEqual(table.columns[ColumnKey("col_format")].width, 8)
+                self.assertEqual(table.columns[ColumnKey("col_size")].width, 11)
+                self.assertEqual(table.columns[ColumnKey("col_progress")].width, 10)
+                self.assertEqual(table.columns[ColumnKey("col_speed")].width, 9)
+                self.assertEqual(table.columns[ColumnKey("col_eta")].width, 9)
+
+        import asyncio
+        asyncio.run(run_test())
+
+    def test_responsive_filename_width(self) -> None:
+        """Verifies calculation of responsive filename character width."""
+        table = QueueDataTable()
+        # Fallback when size is 0
+        self.assertEqual(table.get_responsive_filename_width(), 34)
+
+    def test_queue_stats_header(self) -> None:
+        """Verifies QueueStatsHeader clean horizontal layout with batch statistics."""
+        class HeaderApp(App):
+            def compose(self) -> ComposeResult:
+                yield QueueStatsHeader(id="queue-stats-header")
+
+        app = HeaderApp()
+
+        async def run_test() -> None:
+            async with app.run_test() as pilot:
+                header = app.query_one(QueueStatsHeader)
+                header.update_stats(
+                    staged=15,
+                    completed=8,
+                    failed=2,
+                    runtime_seconds=3665,
+                    remaining_seconds=120,
+                )
+                self.assertEqual(header.staged, 15)
+                self.assertEqual(header.completed, 8)
+                self.assertEqual(header.failed, 2)
+                self.assertEqual(header.runtime_str, "01:01:05")
+                self.assertEqual(header.remaining_str, "00:02:00")
+
+                rendered = header.render()
+                self.assertIn("FILES STAGED:", rendered.plain)
+                self.assertIn("COMPLETED:", rendered.plain)
+                self.assertIn("FAILED:", rendered.plain)
+                self.assertIn("ELAPSED:", rendered.plain)
+                self.assertIn("REMAINING:", rendered.plain)
+
+        import asyncio
+        asyncio.run(run_test())
+
+    def test_task_detail_modal_with_stream_probe_and_metadata(self) -> None:
+        """Verifies TaskDetailModal displays stream details, metadata, audio bitrate, and sample rate."""
+        probe = MediaProbeResult(
+            file_path=Path("F:/test/recording.mp4"),
+            format_name="mov,mp4,m4a",
+            format_long_name="QuickTime / MP4",
+            duration=300.0,
+            size_bytes=1024 * 1024 * 100,
+            bit_rate=2500000,
+            audio_streams=[
+                AudioStreamInfo(
+                    index=1,
+                    codec_name="flac",
+                    codec_long_name="FLAC (Free Lossless Audio Codec)",
+                    channels=2,
+                    channel_layout="stereo",
+                    sample_rate=48000,
+                    bit_rate=960000,
+                    duration=300.0,
+                    tags={"title": "Master Audio"},
+                )
+            ],
+            video_streams=[],
+            has_video=False,
+            has_cover_art=True,
+            cover_art_stream_index=None,
+            tags={"title": "Symphony 5", "artist": "Beethoven", "album": "Masterworks"},
+        )
+
+        task = ConversionTask(
+            task_id="task_probe_telemetry",
+            source_file=Path("F:/test/recording.mp4"),
+            target_format="flac",
+            status=TaskStatus.COMPLETED,
+            progress=100.0,
+            speed="4.5x",
+            eta="00:00",
+            duration_seconds=45.2,
+            input_size_bytes=1024 * 1024 * 100,
+            output_size_bytes=1024 * 1024 * 35,
+            probe_result=probe,
+        )
+
+        class ModalApp(App):
+            def compose(self) -> ComposeResult:
+                yield Label("Root")
+
+        app = ModalApp()
+
+        async def run_test() -> None:
+            async with app.run_test() as pilot:
+                modal = TaskDetailModal(task)
+                app.push_screen(modal)
+                await pilot.pause()
+                content = modal._build_content()
+                plain = content.plain
+
+                # Stream details
+                self.assertIn("flac", plain.lower())
+                self.assertIn("stereo", plain)
+                # Sample rate & Audio bitrate
+                self.assertIn("48000 Hz", plain)
+                self.assertIn("960 kbps", plain)
+                # Metadata
+                self.assertIn("Symphony 5", plain)
+                self.assertIn("Beethoven", plain)
+                self.assertIn("Masterworks", plain)
+                self.assertIn("QuickTime / MP4", plain)
+
+                # Close button exists
+                btn_close = modal.query_one("#btn-detail-close")
+                self.assertIsNotNone(btn_close)
+
+        import asyncio
+        asyncio.run(run_test())
+
+    def test_queue_table_widget_refresh_tasks_alias(self) -> None:
+        """Verifies refresh_tasks method on QueueTableWidget works cleanly."""
+        qm = QueueManager()
+        t1 = qm.add_task(Path("sample_alias.mp4"), "mp3")
+
+        class AliasApp(App):
+            def compose(self) -> ComposeResult:
+                yield QueueTableWidget(queue_manager=qm, id="queue-widget")
+
+        app = AliasApp()
+
+        async def run_test() -> None:
+            async with app.run_test() as pilot:
+                widget = app.query_one(QueueTableWidget)
+                self.assertEqual(widget.row_count, 1)
+                # Calling refresh_tasks should execute without exception
+                widget.refresh_tasks()
+                self.assertEqual(widget.row_count, 1)
+
+        try:
+            import asyncio
+            asyncio.run(run_test())
+        finally:
+            qm.stop()
 
 
 if __name__ == "__main__":

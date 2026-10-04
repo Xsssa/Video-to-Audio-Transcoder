@@ -47,28 +47,38 @@ class CleanToggle(Widget):
         height: 1;
         background: #141722;
         color: #5e6678;
-        border: solid #1b1f2b;
+        border: none;
         text-align: center;
+        content-align: center middle;
         margin: 0;
         padding: 0;
     }
 
+    CleanToggle:hover {
+        background: #1b2030;
+        color: #8b95ad;
+    }
+
     CleanToggle:focus {
-        border: solid #4ba3be;
-        background: #182330;
+        background: #20273c;
         color: #ffffff;
+        text-style: bold;
     }
 
     CleanToggle.-on {
-        background: #162a38;
+        background: #162b3b;
         color: #5cbcdb;
-        border: solid #2a4c63;
+    }
+
+    CleanToggle.-on:hover {
+        background: #1b3549;
+        color: #72cced;
     }
 
     CleanToggle.-on:focus {
-        border: solid #5cbcdb;
-        background: #1d3648;
+        background: #1e3f57;
         color: #ffffff;
+        text-style: bold;
     }
     """
 
@@ -84,9 +94,9 @@ class CleanToggle(Widget):
 
     def render(self) -> Text:
         if self.value:
-            return Text(" [ON]  ", style="bold #5cbcdb")
+            return Text("  [ON]   ", style="bold #5cbcdb")
         else:
-            return Text(" [OFF] ", style="dim #5e6678")
+            return Text("  [OFF]  ", style="dim #5e6678")
 
     def on_click(self) -> None:
         self.value = not self.value
@@ -168,65 +178,58 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
     }
 
     /* Option Cards */
-    .option-row {
+    .option-row, .select-row {
         width: 100%;
-        height: auto;
-        min-height: 2;
+        height: 2;
         align: left middle;
         padding: 0 1;
         background: #141722;
         border-bottom: solid #1b1f2b;
     }
 
-    .option-label {
+    .option-row:hover, .select-row:hover {
+        background: #161a27;
+    }
+
+    .option-label, .field-label {
         width: 1fr;
+        height: 1;
         color: #e1e4ec;
         content-align: left middle;
     }
 
-    .select-row {
-        width: 100%;
-        height: auto;
-        min-height: 2;
-        align: left middle;
-        padding: 0 1;
-        background: #141722;
-        border-bottom: solid #1b1f2b;
-    }
-
-    .field-label {
-        width: 22;
-        color: #9aa2b4;
-        content-align: left middle;
-    }
-
-    .select-row Select {
-        width: 1fr;
+    .option-row Select, .select-row Select {
+        width: 32;
+        height: 1;
         background: #10121a;
         border: none;
         color: #e1e4ec;
-        height: 1;
     }
 
-    .select-row Select:focus {
+    .option-row Select:hover, .select-row Select:hover {
+        background: #171b26;
+        color: #ffffff;
+    }
+
+    .option-row Select:focus, .select-row Select:focus {
+        background: #1b2434;
         color: #ffffff;
     }
 
     /* Action Footer & Buttons */
     #dialog-footer {
         width: 100%;
-        height: 3;
+        height: auto;
         align: right middle;
         margin-top: 1;
-        border-top: solid #1b1f2b;
-        padding-top: 1;
+        padding-top: 0;
     }
 
     #dialog-hotkey-hint {
         width: 1fr;
+        height: 3;
         color: #5e6678;
         content-align: left middle;
-        height: 100%;
     }
 
     #btn-cancel {
@@ -234,7 +237,7 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
         min-width: 14;
         background: #141722;
         color: #9aa2b4;
-        border: solid #242938;
+        border: round #242938;
         margin-right: 1;
         text-align: center;
     }
@@ -242,13 +245,13 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
     #btn-cancel:hover {
         background: #1d2332;
         color: #e1e4ec;
-        border: solid #3d5470;
+        border: round #3d5470;
     }
 
     #btn-cancel:focus {
         background: #1d2332;
         color: #ffffff;
-        border: solid #4ba3be;
+        border: round #4ba3be;
     }
 
     #btn-save {
@@ -256,7 +259,7 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
         min-width: 18;
         background: #1c3547;
         color: #e1e4ec;
-        border: solid #2e5570;
+        border: round #2e5570;
         text-style: bold;
         text-align: center;
     }
@@ -264,13 +267,13 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
     #btn-save:hover {
         background: #254659;
         color: #ffffff;
-        border: solid #5cbcdb;
+        border: round #5cbcdb;
     }
 
     #btn-save:focus {
         background: #254659;
         color: #ffffff;
-        border: solid #5cbcdb;
+        border: round #5cbcdb;
     }
     """
 
@@ -361,8 +364,8 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
                     yield CleanToggle(value=self._init_lossless, id="switch-lossless")
 
                 # 3. Sample Rate
-                with Horizontal(classes="select-row"):
-                    yield Label("Sample Rate:", classes="field-label")
+                with Horizontal(classes="option-row select-row"):
+                    yield Label("Sample Rate:", classes="option-label field-label")
                     yield Select[Union[str, int]](
                         SAMPLE_RATE_CHOICES,
                         value=self._init_sample_rate,
@@ -372,8 +375,8 @@ class FilterDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
                     )
 
                 # 4. Channels
-                with Horizontal(classes="select-row"):
-                    yield Label("Channels:", classes="field-label")
+                with Horizontal(classes="option-row select-row"):
+                    yield Label("Channels:", classes="option-label field-label")
                     yield Select[Union[str, int]](
                         CHANNEL_CHOICES,
                         value=self._init_channels,

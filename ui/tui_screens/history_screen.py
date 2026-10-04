@@ -330,9 +330,9 @@ class HistoryInspectorWidget(Container):
         static = self.query_one("#inspector-content", Static)
         render_text = (
             f"\n\n"
-            f"[dim #555d6e]────────────────────────────────────────────────────────────────[/]\n"
+            f"[dim #555d6e]────────────────────────────────────────────────────────────────────────────[/]\n"
             f"  [dim #7a8292]{escape(message)}[/]\n"
-            f"[dim #555d6e]────────────────────────────────────────────────────────────────[/]\n"
+            f"[dim #555d6e]────────────────────────────────────────────────────────────────────────────[/]\n"
         )
         static.update(render_text)
 
@@ -350,41 +350,32 @@ class HistoryInspectorWidget(Container):
         comp_info = extract_compression_details(task)
         fmt_info = extract_task_format_specs(task)
         lufs_sum, lufs_det = extract_loudness_info(task)
+        cmd_tokens = reconstruct_ffmpeg_command(task)
+        full_cmd = format_command_line(cmd_tokens)
 
         # Subtle dark status badges
         if status_upper == "COMPLETED":
-            status_badge = "[#70a27f on #18261e] COMPLETED [/]"
-            status_color = "#70a27f"
+            status_badge = "[#52b788 on #14281c] COMPLETED [/]"
         elif status_upper == "FAILED":
-            status_badge = "[#d06e6e on #2e1717] FAILED [/]"
-            status_color = "#d06e6e"
+            status_badge = "[#e06c75 on #2b1619] FAILED [/]"
         elif status_upper == "CANCELLED":
-            status_badge = "[#b8985c on #262118] CANCELLED [/]"
-            status_color = "#b8985c"
+            status_badge = "[#e5c07b on #272115] CANCELLED [/]"
         else:
-            status_badge = f"[#8a92a2 on #1e222a] {status_upper} [/]"
-            status_color = "#8a92a2"
+            status_badge = f"[#8a92a2 on #1c202a] {status_upper} [/]"
 
         lines: list[str] = []
 
         # Card Title Header
-        lines.append(f"{status_badge}  [bold #e2e6ed]{escape(src_name)}[/]")
-        lines.append(f"[dim #3a4150]Task ID: {task.task_id}  |  Updated: {datetime.datetime.now().strftime('%H:%M:%S')}[/]")
-        lines.append("[dim #2a313d]────────────────────────────────────────────────────────────────────────────[/]")
+        lines.append(f"{status_badge}  [bold #e2e6ed]{escape(src_name)}[/]  [dim #555d6e]•[/]  [dim #7a8292]ID:[/] [#a6adb9]{task.task_id}[/]")
+        lines.append("[dim #262c38]────────────────────────────────────────────────────────────────────────────[/]")
 
         if status_upper == "COMPLETED":
             # Completed File Inspection
             lines.append(f"[bold #8a93a4]► AUDIO CONVERSION TELEMETRY[/]")
             lines.append(f"  [dim #6e7687]Source File:[/]      [#c8ccd6]{escape(src_path)}[/]")
             lines.append(f"  [dim #6e7687]Output File:[/]      [#c8ccd6]{escape(out_path)}[/]")
-            lines.append("")
-
-            lines.append(f"[bold #8a93a4]► FORMAT & CODEC SPECIFICATIONS[/]")
-            lines.append(f"  [dim #6e7687]Source Format:[/]    [#c8ccd6]{fmt_info['source_format']}[/]")
-            lines.append(f"  [dim #6e7687]Target Format:[/]    [#c8ccd6]{fmt_info['target_format']}[/]")
-            lines.append(f"  [dim #6e7687]Audio Codec:[/]      [#c8ccd6]{fmt_info['codec']}[/]")
-            lines.append(f"  [dim #6e7687]Bit Rate:[/]         [#c8ccd6]{fmt_info['bitrate']}[/]")
-            lines.append(f"  [dim #6e7687]Sample Rate / Ch:[/] [#c8ccd6]{fmt_info['sample_rate']} | {fmt_info['channels']}[/]")
+            lines.append(f"  [dim #6e7687]Format & Codec:[/]   [#c8ccd6]{fmt_info['source_format']} → {fmt_info['target_format']} ({fmt_info['codec']})[/]")
+            lines.append(f"  [dim #6e7687]Bit Rate / Specs:[/] [#c8ccd6]{fmt_info['bitrate']} | {fmt_info['sample_rate']} | {fmt_info['channels']}[/]")
             lines.append("")
 
             lines.append(f"[bold #8a93a4]► OUTPUT DURATION & COMPRESSION[/]")
@@ -394,7 +385,7 @@ class HistoryInspectorWidget(Container):
 
             ratio_disp = comp_info['ratio_str']
             if comp_info['ratio_percent'] < 0:
-                ratio_badge = f"[#70a27f]{ratio_disp}[/]"
+                ratio_badge = f"[bold #52b788]{ratio_disp}[/]"
             else:
                 ratio_badge = f"[#c8ccd6]{ratio_disp}[/]"
             lines.append(f"  [dim #6e7687]Compression Ratio:[/] {ratio_badge} (Saved {comp_info['space_saved_human']})")
@@ -409,43 +400,48 @@ class HistoryInspectorWidget(Container):
             speed_val = getattr(task, "speed", "1.0x")
             wall_time = getattr(task, "duration_seconds", 0.0)
             lines.append(f"[bold #8a93a4]► EXECUTION TELEMETRY[/]")
-            lines.append(f"  [dim #6e7687]Transcode Speed:[/]  [#c8ccd6]{speed_val}[/]")
-            lines.append(f"  [dim #6e7687]Processing Time:[/]  [#c8ccd6]{wall_time:.2f}s[/]")
+            lines.append(f"  [dim #6e7687]Transcode Speed:[/]  [#c8ccd6]{speed_val}[/]  |  [dim #6e7687]Processing Time:[/] [#c8ccd6]{wall_time:.2f}s[/]")
 
             ver = getattr(task, "verification_result", None)
             if ver:
                 ver_status = ver.status_label
-                v_color = "#70a27f" if ver.is_valid else "#d06e6e"
+                v_color = "#52b788" if ver.is_valid else "#e06c75"
                 lines.append(f"  [dim #6e7687]Integrity Check:[/]  [{v_color}]{ver_status}[/]")
                 if ver.warnings:
-                    lines.append(f"  [dim #b8985c]Warnings:[/]          {escape('; '.join(ver.warnings))}")
+                    lines.append(f"  [dim #e5c07b]Warnings:[/]          {escape('; '.join(ver.warnings))}")
+            lines.append("")
+
+            # Exact FFmpeg Command Line
+            lines.append(f"[bold #8a93a4]► EXACT FFMPEG COMMAND EXECUTED[/]")
+            lines.append("[dim #262c38]┌──────────────────────────────────────────────────────────────────────────┐[/]")
+            lines.append(f"[#8a9bb5]{escape(full_cmd)}[/]")
+            lines.append("[dim #262c38]└──────────────────────────────────────────────────────────────────────────┘[/]")
 
         elif status_upper == "FAILED":
             # Failed File Inspection
             err_msg = getattr(task, "error", None) or "Unknown error"
             tb_str = extract_task_traceback(task)
-            cmd_tokens = reconstruct_ffmpeg_command(task)
-            full_cmd = format_command_line(cmd_tokens)
 
-            lines.append(f"[bold #d06e6e]► FAILURE DIAGNOSTIC OVERVIEW[/]")
+            lines.append(f"[bold #e06c75]► FAILURE DIAGNOSTIC OVERVIEW[/]")
             lines.append(f"  [dim #6e7687]Source File:[/]      [#c8ccd6]{escape(src_path)}[/]")
             lines.append(f"  [dim #6e7687]Target Format:[/]    [#c8ccd6]{fmt_info['target_format']}[/]")
-            lines.append(f"  [dim #6e7687]Error Summary:[/]    [#d06e6e]{escape(str(err_msg))}[/]")
+            lines.append(f"  [dim #6e7687]Input Size:[/]       [#c8ccd6]{comp_info['input_human']}[/]")
+            lines.append(f"  [dim #6e7687]Compression:[/]      [#8a92a2]{comp_info['ratio_str']}[/] (Failed before output)")
+            lines.append(f"  [dim #6e7687]Error Summary:[/]    [bold #e06c75]{escape(str(err_msg))}[/]")
             lines.append("")
 
             lines.append(f"[bold #8a93a4]► EXACT FFMPEG COMMAND EXECUTED[/]")
-            lines.append("[dim #2a313d]┌──────────────────────────────────────────────────────────────────────────┐[/]")
-            lines.append(f"[#a6adb9]{escape(full_cmd)}[/]")
-            lines.append("[dim #2a313d]└──────────────────────────────────────────────────────────────────────────┘[/]")
+            lines.append("[dim #262c38]┌──────────────────────────────────────────────────────────────────────────┐[/]")
+            lines.append(f"[#8a9bb5]{escape(full_cmd)}[/]")
+            lines.append("[dim #262c38]└──────────────────────────────────────────────────────────────────────────┘[/]")
             lines.append("")
 
-            lines.append(f"[bold #8a93a4]► DETAILED ERROR TRACEBACK[/]")
-            lines.append("[dim #2a313d]┌──────────────────────────────────────────────────────────────────────────┐[/]")
-            # Format traceback with muted red-gray
+            lines.append(f"[bold #e06c75]► DETAILED ERROR TRACEBACK[/]")
+            lines.append("[dim #262c38]┌──────────────────────────────────────────────────────────────────────────┐[/]")
             tb_lines = tb_str.splitlines()
             for tl in tb_lines:
                 lines.append(f"[#c47878]{escape(tl)}[/]")
-            lines.append("[dim #2a313d]└──────────────────────────────────────────────────────────────────────────┘[/]")
+            lines.append("[dim #262c38]└──────────────────────────────────────────────────────────────────────────┘[/]")
 
         else:
             # Cancelled or Pending
@@ -454,7 +450,7 @@ class HistoryInspectorWidget(Container):
             lines.append(f"  [dim #6e7687]Target Format:[/]    [#c8ccd6]{fmt_info['target_format']}[/]")
             lines.append(f"  [dim #6e7687]Input Size:[/]       [#c8ccd6]{comp_info['input_human']}[/]")
             if task.error:
-                lines.append(f"  [dim #6e7687]Reason:[/]           [#b8985c]{escape(str(task.error))}[/]")
+                lines.append(f"  [dim #6e7687]Reason:[/]           [#e5c07b]{escape(str(task.error))}[/]")
             lines.append(f"  [dim #6e7687]Progress:[/]         [#c8ccd6]{task.progress:.1f}%[/]")
 
         static.update("\n".join(lines))
@@ -470,11 +466,253 @@ class HistoryView(Container):
     Can be used standalone in a screen, inside tabs, or embedded in dashboards.
     """
 
+    DEFAULT_CSS = """
+    HistoryView {
+        width: 100%;
+        height: 100%;
+        layout: vertical;
+        background: #13161e;
+    }
+
+    #history-modal-header {
+        height: 3;
+        background: #171b24;
+        border-bottom: solid #212632;
+        padding: 0 1;
+        layout: horizontal;
+        align: center middle;
+    }
+
+    #modal-title {
+        width: 1fr;
+        text-style: bold;
+        color: #e2e6ed;
+    }
+
+    #filter-buttons {
+        width: auto;
+        height: 3;
+        layout: horizontal;
+        align: right middle;
+    }
+
+    .filter-btn {
+        height: 1;
+        min-width: 9;
+        margin-left: 1;
+        background: #1b202a;
+        color: #838c9e;
+        border: none;
+        padding: 0 1;
+    }
+
+    .filter-btn:hover {
+        background: #252c3a;
+        color: #ffffff;
+    }
+
+    .filter-btn.active {
+        background: #24354a;
+        color: #61afef;
+        text-style: bold;
+    }
+
+    #history-summary-cards {
+        height: 3;
+        layout: horizontal;
+        align: center middle;
+        margin: 0;
+        padding: 0 1;
+    }
+
+    .telemetry-card {
+        height: 3;
+        width: 1fr;
+        background: #161a22;
+        margin: 0 1;
+        padding: 0 1;
+        layout: vertical;
+        align: left middle;
+    }
+
+    #card-total {
+        border-left: solid #5c789e;
+    }
+
+    #card-completed {
+        border-left: solid #52b788;
+    }
+
+    #card-failed {
+        border-left: solid #e06c75;
+    }
+
+    #card-time {
+        border-left: solid #61afef;
+    }
+
+    #card-saved {
+        border-left: solid #52b788;
+    }
+
+    .card-label {
+        height: 1;
+        color: #6d7688;
+        text-style: bold;
+    }
+
+    .card-value {
+        height: 1;
+        text-style: bold;
+        color: #e2e6ed;
+    }
+
+    .card-completed, #stat-completed {
+        color: #52b788;
+    }
+
+    .card-failed, #stat-failed {
+        color: #e06c75;
+    }
+
+    .card-time, #stat-time {
+        color: #61afef;
+    }
+
+    .card-saved, #stat-saved {
+        color: #52b788;
+    }
+
+    #table-container {
+        height: 1fr;
+        min-height: 5;
+        background: #11141b;
+        border-top: solid #212632;
+        border-bottom: solid #212632;
+        margin: 0;
+        padding: 0;
+    }
+
+    DataTable {
+        background: #11141b;
+        border: none;
+        height: 100%;
+    }
+
+    DataTable > .datatable--header {
+        background: #171b24;
+        color: #8d96a7;
+        text-style: bold;
+    }
+
+    DataTable > .datatable--cursor {
+        background: #242c3b;
+        color: #ffffff;
+        text-style: bold;
+    }
+
+    DataTable > .datatable--even {
+        background: #11141b;
+    }
+
+    DataTable > .datatable--odd {
+        background: #141720;
+    }
+
+    #inspector-container {
+        height: 6;
+        min-height: 5;
+        max-height: 10;
+        background: #13161e;
+        border-bottom: solid #212632;
+        margin: 0;
+        padding: 0;
+    }
+
+    #task-inspector {
+        height: 100%;
+        background: #13161e;
+        border: none;
+        padding: 0;
+    }
+
+    #inspector-scroll-area {
+        height: 100%;
+        padding: 0 1;
+    }
+
+    #inspector-content {
+        color: #c8ccd6;
+    }
+
+    #history-notification {
+        height: 1;
+        background: #171b23;
+        padding: 0 1;
+        text-align: center;
+        text-style: italic;
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    #history-actions-bar {
+        height: 3;
+        layout: horizontal;
+        align: center middle;
+        margin: 0;
+        padding: 0 1;
+        background: #13161e;
+    }
+
+    .action-btn {
+        height: 3;
+        width: 1fr;
+        margin: 0 1;
+        background: #1a1e27;
+        color: #aeb4bf;
+        border: solid #2a313d;
+        text-style: bold;
+    }
+
+    .action-btn:hover {
+        background: #252b37;
+        color: #ffffff;
+        border: solid #3b4556;
+    }
+
+    .action-btn:focus {
+        background: #232c3d;
+        color: #ffffff;
+        border: solid #61afef;
+    }
+
+    .btn-close {
+        background: #231d22;
+        color: #e09999;
+        border: solid #3d2830;
+    }
+
+    .btn-close:hover {
+        background: #332027;
+        color: #ffffff;
+        border: solid #5c3540;
+    }
+
+    .btn-close:focus {
+        background: #3a222c;
+        color: #ffffff;
+        border: solid #e06c75;
+    }
+    """
+
     def __init__(
         self,
         tasks: Optional[Sequence[Any]] = None,
         queue_manager: Optional[QueueManager] = None,
         on_export_callback: Optional[Any] = None,
+        on_close_callback: Optional[Any] = None,
         name: Optional[str] = None,
         id: Optional[str] = None,
         classes: Optional[str] = None,
@@ -485,37 +723,53 @@ class HistoryView(Container):
         self._filter_mode = "ALL"  # "ALL", "COMPLETED", "FAILED"
         self._selected_task_id: Optional[str] = None
         self._on_export_callback = on_export_callback
+        self._on_close_callback = on_close_callback
         self._last_exported_path: Optional[Path] = None
 
     def compose(self) -> ComposeResult:
-        # Header Status & Summary Metrics
-        with Horizontal(id="history-stats-bar"):
-            yield Label("[dim #7a8292]Total:[/] [bold #e2e6ed]0[/]", id="stat-total")
-            yield Label("[dim #7a8292]Completed:[/] [#70a27f]0[/]", id="stat-completed")
-            yield Label("[dim #7a8292]Failed:[/] [#d06e6e]0[/]", id="stat-failed")
-            yield Label("[dim #7a8292]Saved:[/] [#70a27f]0 B[/]", id="stat-saved")
-            yield Label("[dim #7a8292]Wall Time:[/] [#c8ccd6]00:00[/]", id="stat-time")
-
-        # Filter & Action Control Strip
-        with Horizontal(id="history-controls-bar"):
+        # Header Status Bar with Title & Filter Controls
+        with Horizontal(id="history-modal-header"):
+            yield Label("SESSION CONVERSION HISTORY & INSPECTOR", id="modal-title")
             with Horizontal(id="filter-buttons"):
                 yield Button("All", id="btn-filter-all", classes="filter-btn active")
                 yield Button("Completed", id="btn-filter-completed", classes="filter-btn")
                 yield Button("Failed", id="btn-filter-failed", classes="filter-btn")
-            with Horizontal(id="export-buttons"):
-                yield Button("Export JSON", id="btn-export-json", classes="action-btn")
-                yield Button("Export CSV", id="btn-export-csv", classes="action-btn")
-                yield Button("Export TXT", id="btn-export-txt", classes="action-btn")
 
-        # Notification / Status Toast
+        # Sleek Summary Telemetry Cards
+        with Horizontal(id="history-summary-cards"):
+            with Vertical(classes="telemetry-card", id="card-total"):
+                yield Label("TOTAL FILES", classes="card-label")
+                yield Label("0", id="stat-total", classes="card-value")
+            with Vertical(classes="telemetry-card", id="card-completed"):
+                yield Label("COMPLETED", classes="card-label")
+                yield Label("0", id="stat-completed", classes="card-value card-completed")
+            with Vertical(classes="telemetry-card", id="card-failed"):
+                yield Label("FAILED", classes="card-label")
+                yield Label("0", id="stat-failed", classes="card-value card-failed")
+            with Vertical(classes="telemetry-card", id="card-time"):
+                yield Label("TOTAL TIME", classes="card-label")
+                yield Label("00:00", id="stat-time", classes="card-value card-time")
+            with Vertical(classes="telemetry-card", id="card-saved"):
+                yield Label("SPACE SAVED", classes="card-label")
+                yield Label("0 B", id="stat-saved", classes="card-value card-saved")
+
+        # Center DataTable
+        with Container(id="table-container"):
+            yield DataTable(id="history-data-table")
+
+        # Bottom Inspector Panel
+        with Container(id="inspector-container"):
+            yield HistoryInspectorWidget(id="task-inspector")
+
+        # Notification Toast
         yield Label("", id="history-notification", classes="hidden")
 
-        # Main Split Workspace
-        with Horizontal(id="history-main-split"):
-            with Container(id="table-pane"):
-                yield DataTable(id="history-data-table")
-            with Container(id="inspector-pane"):
-                yield HistoryInspectorWidget(id="task-inspector")
+        # Bottom Action Buttons Bar
+        with Horizontal(id="history-actions-bar"):
+            yield Button("Export JSON", id="btn-export-json", classes="action-btn")
+            yield Button("Export CSV", id="btn-export-csv", classes="action-btn")
+            yield Button("Export TXT", id="btn-export-txt", classes="action-btn")
+            yield Button("Close (Esc)", id="btn-close-modal", classes="action-btn btn-close")
 
     def on_mount(self) -> None:
         """Configures data table and loads initial tasks."""
@@ -523,15 +777,14 @@ class HistoryView(Container):
         table.cursor_type = "row"
         table.zebra_stripes = True
 
-        # Columns: #, Status, Source File, Target, Duration, Bitrate, Compression, LUFS
-        table.add_column("#", key="idx", width=4)
+        # Clean column layout (ID, Source, Target, Duration, Size, Ratio, Status)
+        table.add_column("ID", key="id", width=6)
+        table.add_column("Source", key="source", width=24)
+        table.add_column("Target", key="target", width=8)
+        table.add_column("Duration", key="duration", width=10)
+        table.add_column("Size", key="size", width=10)
+        table.add_column("Ratio", key="ratio", width=10)
         table.add_column("Status", key="status", width=12)
-        table.add_column("Source File", key="source", width=22)
-        table.add_column("Target", key="target", width=7)
-        table.add_column("Bitrate", key="bitrate", width=9)
-        table.add_column("Duration", key="duration", width=9)
-        table.add_column("Ratio", key="ratio", width=9)
-        table.add_column("LUFS", key="lufs", width=10)
 
         self.refresh_tasks()
 
@@ -568,11 +821,12 @@ class HistoryView(Container):
 
         wall_time = sum(getattr(t, "duration_seconds", 0.0) for t in tasks)
 
-        self.query_one("#stat-total", Label).update(f"[dim #7a8292]Total:[/] [bold #e2e6ed]{total}[/]")
-        self.query_one("#stat-completed", Label).update(f"[dim #7a8292]Completed:[/] [#70a27f]{completed}[/]")
-        self.query_one("#stat-failed", Label).update(f"[dim #7a8292]Failed:[/] [#d06e6e]{failed}[/]")
-        self.query_one("#stat-saved", Label).update(f"[dim #7a8292]Saved:[/] [#70a27f]{format_bytes_human(saved)}[/]")
-        self.query_one("#stat-time", Label).update(f"[dim #7a8292]Wall Time:[/] [#c8ccd6]{format_duration_human(wall_time)}[/]")
+        # Update telemetry cards
+        self.query_one("#stat-total", Label).update(f"[bold #e2e6ed]{total}[/]")
+        self.query_one("#stat-completed", Label).update(f"[bold #52b788]{completed}[/]")
+        self.query_one("#stat-failed", Label).update(f"[bold #e06c75]{failed}[/]")
+        self.query_one("#stat-time", Label).update(f"[bold #61afef]{format_duration_human(wall_time)}[/]")
+        self.query_one("#stat-saved", Label).update(f"[bold #52b788]{format_bytes_human(saved)}[/]")
 
         # Apply filtering
         filtered: list[Any] = []
@@ -593,31 +847,46 @@ class HistoryView(Container):
 
             st = str(task.status).upper()
             if st.endswith("COMPLETED"):
-                st_markup = "[#70a27f]PASS[/]"
+                st_markup = "[#52b788]COMPLETED[/]"
             elif st.endswith("FAILED"):
-                st_markup = "[#d06e6e]FAIL[/]"
+                st_markup = "[#e06c75]FAILED[/]"
             elif st.endswith("CANCELLED"):
-                st_markup = "[#b8985c]CANCEL[/]"
+                st_markup = "[#e5c07b]CANCELLED[/]"
             else:
-                st_markup = f"[#8a92a2]{st[:6]}[/]"
+                st_markup = f"[#8a92a2]{st[:9]}[/]"
 
             src_name = Path(str(getattr(task, "source_file", ""))).name or tid
-            if len(src_name) > 20:
-                src_name = src_name[:17] + "..."
+            if len(src_name) > 22:
+                src_name = src_name[:19] + "..."
 
             fmt_info = extract_task_format_specs(task)
             comp_info = extract_compression_details(task)
-            lufs_sum, _ = extract_loudness_info(task)
+
+            # Ratio markup
+            ratio_disp = comp_info["ratio_str"]
+            if comp_info["ratio_percent"] < 0:
+                ratio_markup = f"[bold #52b788]{ratio_disp}[/]"
+            elif comp_info["ratio_percent"] > 0:
+                ratio_markup = f"[#e06c75]{ratio_disp}[/]"
+            else:
+                ratio_markup = f"[#8a92a2]{ratio_disp}[/]"
+
+            # Size display: output size if completed, else input size or --
+            if st.endswith("COMPLETED"):
+                size_disp = comp_info["output_human"]
+            elif comp_info["input_bytes"] > 0:
+                size_disp = comp_info["input_human"]
+            else:
+                size_disp = "--"
 
             table.add_row(
-                str(idx),
-                Text.from_markup(st_markup),
+                f"#{idx}",
                 src_name,
                 fmt_info["target_format"],
-                fmt_info["bitrate"],
                 fmt_info["duration_str"],
-                comp_info["ratio_str"],
-                lufs_sum,
+                size_disp,
+                Text.from_markup(ratio_markup),
+                Text.from_markup(st_markup),
                 key=tid,
             )
 
@@ -668,6 +937,10 @@ class HistoryView(Container):
             self.export_report("csv")
         elif bid == "btn-export-txt":
             self.export_report("txt")
+        elif bid == "btn-close-modal":
+            event.stop()
+            if callable(self._on_close_callback):
+                self._on_close_callback()
 
     def _set_filter(self, mode: str, button: Button) -> None:
         self._filter_mode = mode
@@ -679,7 +952,7 @@ class HistoryView(Container):
     def show_notification(self, message: str, is_error: bool = False) -> None:
         """Displays temporary unobtrusive notification banner."""
         label = self.query_one("#history-notification", Label)
-        color = "#d06e6e" if is_error else "#70a27f"
+        color = "#e06c75" if is_error else "#52b788"
         label.update(f"[{color}]{message}[/]")
         label.remove_class("hidden")
         self.set_timer(5.0, lambda: label.add_class("hidden"))
@@ -744,154 +1017,14 @@ class HistoryModalScreen(ModalScreen[Optional[Path]]):
     }
 
     #history-modal-dialog {
-        width: 95%;
-        height: 94%;
-        background: #14171d;
-        border: solid #2a313d;
+        width: 96%;
+        max-width: 130;
+        height: 100%;
+        max-height: 48;
+        background: #13161e;
+        border: solid #262d3a;
         layout: vertical;
         padding: 0;
-    }
-
-    #history-modal-header {
-        height: 3;
-        background: #181c23;
-        border-bottom: solid #262c37;
-        padding: 0 1;
-        layout: horizontal;
-        align: center middle;
-    }
-
-    #modal-title {
-        width: 1fr;
-        text-style: bold;
-        color: #e2e6ed;
-    }
-
-    #btn-close-modal {
-        min-width: 10;
-        height: 3;
-        background: #20252e;
-        color: #cfd4de;
-        border: tall #2e3543;
-    }
-
-    #btn-close-modal:hover {
-        background: #2a313d;
-        color: #ffffff;
-        border: tall #3e4758;
-    }
-
-    HistoryView {
-        height: 1fr;
-        layout: vertical;
-        background: #14171d;
-    }
-
-    #history-stats-bar {
-        height: 3;
-        background: #161920;
-        border-bottom: solid #222731;
-        padding: 0 1;
-        layout: horizontal;
-        align: center middle;
-    }
-
-    #history-stats-bar Label {
-        margin-right: 3;
-    }
-
-    #history-controls-bar {
-        height: 3;
-        background: #191d24;
-        border-bottom: solid #222731;
-        padding: 0 1;
-        layout: horizontal;
-        align: center middle;
-    }
-
-    #filter-buttons {
-        width: 1fr;
-        layout: horizontal;
-    }
-
-    #export-buttons {
-        layout: horizontal;
-    }
-
-    Button {
-        height: 3;
-        min-width: 9;
-        margin-right: 1;
-        background: #1e232b;
-        color: #aeb4bf;
-        border: tall #2a313d;
-    }
-
-    Button:hover {
-        background: #272e39;
-        color: #ffffff;
-        border: tall #384252;
-    }
-
-    Button.active {
-        background: #273142;
-        color: #e2e6ed;
-        border: tall #3f4e66;
-    }
-
-    #history-notification {
-        height: 2;
-        background: #171b22;
-        padding: 0 1;
-        text-style: italic;
-    }
-
-    .hidden {
-        display: none;
-    }
-
-    #history-main-split {
-        height: 1fr;
-        layout: horizontal;
-    }
-
-    #table-pane {
-        width: 53%;
-        height: 100%;
-        border-right: solid #222731;
-        background: #13151b;
-    }
-
-    #inspector-pane {
-        width: 47%;
-        height: 100%;
-        background: #14171d;
-    }
-
-    DataTable {
-        background: #13151b;
-        border: none;
-        height: 100%;
-    }
-
-    DataTable > .datatable--header {
-        background: #181c23;
-        color: #8a93a3;
-        text-style: bold;
-    }
-
-    DataTable > .datatable--cursor {
-        background: #232a35;
-        color: #ffffff;
-    }
-
-    #inspector-scroll-area {
-        height: 100%;
-        padding: 1 2;
-    }
-
-    #inspector-content {
-        color: #c8ccd6;
     }
     """
 
@@ -918,20 +1051,18 @@ class HistoryModalScreen(ModalScreen[Optional[Path]]):
 
     def compose(self) -> ComposeResult:
         with Container(id="history-modal-dialog"):
-            with Horizontal(id="history-modal-header"):
-                yield Label("SESSION CONVERSION HISTORY & INSPECTOR", id="modal-title")
-                yield Button("Close (Esc)", id="btn-close-modal")
-
             yield HistoryView(
                 tasks=self.initial_tasks,
                 queue_manager=self.queue_manager,
+                on_close_callback=self.action_dismiss_modal,
                 id="history-view-inner",
             )
 
     def action_dismiss_modal(self) -> None:
         """Dismisses the modal screen."""
-        view = self.query_one("#history-view-inner", HistoryView)
-        self.dismiss(view._last_exported_path)
+        if self.is_current:
+            view = self.query_one("#history-view-inner", HistoryView)
+            self.dismiss(view._last_exported_path)
 
     def action_refresh_view(self) -> None:
         """Refreshes tasks from queue manager."""
@@ -948,6 +1079,7 @@ class HistoryModalScreen(ModalScreen[Optional[Path]]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-close-modal":
+            event.stop()
             self.action_dismiss_modal()
 
 
@@ -981,3 +1113,4 @@ class HistoryTabPane(TabPane):
     def refresh_history(self) -> None:
         """Refreshes the inner history view."""
         self.query_one("#tab-history-view", HistoryView).refresh_tasks()
+

@@ -22,6 +22,7 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from rich.box import Box
 from rich.table import Table
 from rich.text import Text
 from textual import events
@@ -42,7 +43,7 @@ SHORTCUT_CATEGORIES: Dict[str, List[Tuple[str, str]]] = {
         ("Enter", "Inspect item"),
     ],
     "ACTIONS": [
-        ("a", "Add / Browse Files"),
+        ("b / a", "Add / Browse Files"),
         ("v", "Paste Clipboard"),
         ("s", "Start / Pause Conversion"),
     ],
@@ -109,9 +110,14 @@ def format_key_badges(key_str: str) -> str:
     return " [dim #52525b]/[/] ".join(badges)
 
 
-def build_shortcut_table(shortcuts: Sequence[Tuple[str, str]]) -> Table:
+def build_shortcut_table(
+    shortcuts: Sequence[Tuple[str, str]],
+    key_width: Optional[int] = None,
+) -> Table:
     """
     Builds a compact Rich Table displaying keycap badges and action descriptions.
+    When key_width is None, the key column auto-sizes to fit the badges while ensuring
+    descriptions are aligned and have maximum space to prevent awkward wrapping.
     """
     table = Table(
         box=None,
@@ -120,7 +126,10 @@ def build_shortcut_table(shortcuts: Sequence[Tuple[str, str]]) -> Table:
         padding=(0, 1),
         expand=True,
     )
-    table.add_column("Key", width=22, no_wrap=True)
+    if key_width is not None:
+        table.add_column("Key", width=key_width, no_wrap=True)
+    else:
+        table.add_column("Key", no_wrap=True)
     table.add_column("Description", style="#a1a1aa")
     for key, desc in shortcuts:
         table.add_row(format_key_badges(key), f"[#a1a1aa]{desc}[/]")
@@ -146,12 +155,27 @@ def build_mouse_guide_table(items: Sequence[Tuple[str, str]]) -> Table:
     return table
 
 
+# Minimal horizontal divider box for clean separation between tip items
+_TIPS_DIVIDER_BOX = Box(
+    "    \n"
+    "    \n"
+    "    \n"
+    "    \n"
+    " ── \n"
+    "    \n"
+    "    \n"
+    "    \n"
+)
+
+
 def build_tips_table(tips: Sequence[Tuple[str, str]]) -> Table:
     """
-    Builds a structured Rich Table for pro tips and technical features.
+    Builds a structured Rich Table for pro tips and technical features with neat
+    horizontal dividers between items.
     """
     table = Table(
-        box=None,
+        box=_TIPS_DIVIDER_BOX,
+        border_style="#27272a",
         show_header=False,
         pad_edge=False,
         padding=(0, 1),
@@ -159,9 +183,13 @@ def build_tips_table(tips: Sequence[Tuple[str, str]]) -> Table:
     )
     table.add_column("Feature", width=26, no_wrap=True)
     table.add_column("Details", style="#a1a1aa")
-    for title, desc in tips:
+    for i, (title, desc) in enumerate(tips):
         title_markup = f"[bold #f4f4f5]► {title}[/]"
-        table.add_row(title_markup, f"[#a1a1aa]{desc}[/]")
+        table.add_row(
+            title_markup,
+            f"[#a1a1aa]{desc}[/]",
+            end_section=(i < len(tips) - 1),
+        )
     return table
 
 
@@ -178,7 +206,7 @@ class HelpView(VerticalScroll):
     DEFAULT_CSS = """
     HelpView {
         height: 1fr;
-        padding: 1 2;
+        padding: 1 1;
         background: transparent;
     }
 
@@ -300,7 +328,7 @@ class HelpModalScreen(ModalScreen[None]):
     }
 
     #help-dialog-container {
-        width: 86;
+        width: 88;
         max-width: 96%;
         height: 88%;
         max-height: 44;
@@ -318,7 +346,7 @@ class HelpModalScreen(ModalScreen[None]):
         border-bottom: solid #27272a;
         padding: 0 1;
         layout: horizontal;
-        align: center middle;
+        align: right middle;
     }
 
     #help-title-block {
@@ -332,22 +360,22 @@ class HelpModalScreen(ModalScreen[None]):
     }
 
     #btn-close {
-        min-width: 12;
+        min-width: 10;
         height: 1;
-        background: #18181b;
+        background: #27272a;
         color: #a1a1aa;
-        border: solid #3f3f46;
+        border: none;
+        padding: 0 1;
     }
 
     #btn-close:hover {
-        background: #27272a;
+        background: #3f3f46;
         color: #f4f4f5;
-        border: solid #52525b;
     }
 
     #btn-close:focus {
-        background: #3f3f46;
-        border: double #a1a1aa;
+        background: #52525b;
+        color: #ffffff;
     }
 
     #help-footer {
@@ -358,12 +386,13 @@ class HelpModalScreen(ModalScreen[None]):
         border-top: solid #27272a;
         padding: 0 2;
         layout: horizontal;
-        align: center middle;
+        align: right middle;
     }
 
     #help-footer-hint {
         width: 1fr;
-        color: #52525b;
+        color: #71717a;
+        content-align: left middle;
     }
 
     #btn-close-bottom {
@@ -371,19 +400,20 @@ class HelpModalScreen(ModalScreen[None]):
         height: 1;
         background: #27272a;
         color: #f4f4f5;
-        border: solid #52525b;
+        border: none;
+        padding: 0 2;
         text-style: bold;
     }
 
     #btn-close-bottom:hover {
         background: #3f3f46;
-        border: solid #71717a;
         color: #ffffff;
     }
 
     #btn-close-bottom:focus {
-        background: #3f3f46;
-        border: double #a1a1aa;
+        background: #52525b;
+        color: #ffffff;
+        text-style: bold;
     }
     """
 

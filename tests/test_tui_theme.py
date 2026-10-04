@@ -129,3 +129,66 @@ class TestTuiTheme:
         assert hasattr(app, "registered")
         assert app.theme == "slate-dark"
         assert "ENTERPRISE SLATE-DARK TUI THEME" in app.CSS
+
+    def test_unified_button_styles(self):
+        """Verifies unified Button styles, states, and variants are defined in TUI_CSS."""
+        assert "Button {" in TUI_CSS
+        assert "Button:hover {" in TUI_CSS
+        assert "Button:focus {" in TUI_CSS
+        assert "Button.-active" in TUI_CSS
+        assert "Button:disabled {" in TUI_CSS
+        assert "Button.-primary" in TUI_CSS
+        assert "Button.-success" in TUI_CSS
+        assert "Button.-error" in TUI_CSS
+        assert "Button.-warning" in TUI_CSS
+        assert "#btn-cancel" in TUI_CSS
+
+    def test_unified_modal_dialogs(self):
+        """Verifies ModalScreen and dialog containers across screens are unified."""
+        assert "ModalScreen" in TUI_CSS
+        assert ".modal-dialog" in TUI_CSS
+        assert "#picker-dialog" in TUI_CSS
+        assert "#filter-dialog-container" in TUI_CSS
+        assert "#help-dialog-container" in TUI_CSS
+        assert "#history-modal-dialog" in TUI_CSS
+        assert "#preset-dialog-box" in TUI_CSS
+
+    def test_unified_scrollbars(self):
+        """Verifies scrollbar rules are slim 1x1 and slate-themed across all containers."""
+        assert "scrollbar-size: 1 1;" in TUI_CSS
+        assert "scrollbar-color: #242938;" in TUI_CSS
+        assert "scrollbar-background: #10121a;" in TUI_CSS
+        assert "VerticalScroll" in TUI_CSS
+        assert "DataTable" in TUI_CSS
+
+    def test_unified_card_borders(self):
+        """Verifies cards and panels share unified subtle borders."""
+        assert ".panel" in TUI_CSS
+        assert ".card" in TUI_CSS
+        assert "#queue-container" in TUI_CSS
+        assert "#monitor-container" in TUI_CSS
+        assert "#log-container" in TUI_CSS
+        assert "border: round #242938;" in TUI_CSS
+
+    def test_status_bar_global_rules(self):
+        """Verifies TUIStatusBar and its 3 sections are included in global TUI_CSS."""
+        assert "TUIStatusBar {" in TUI_CSS
+        assert "#status-bar-left {" in TUI_CSS
+        assert "#status-bar-center {" in TUI_CSS
+        assert "#status-bar-right {" in TUI_CSS
+        assert "text-wrap: nowrap;" in TUI_CSS
+        assert "text-overflow: ellipsis;" in TUI_CSS
+
+    def test_dark_aesthetic_zero_gaudy_colors(self):
+        """Verifies all theme colors follow a clean, low-saturation dark palette."""
+        # Ensure deep dark background values
+        assert THEME_COLORS["bg_root"] == "#0d0f14"
+        assert THEME_COLORS["bg_surface"] == "#13161f"
+        assert THEME_COLORS["bg_header"] == "#10121a"
+        assert THEME_COLORS["bg_footer"] == "#10121a"
+
+        # Ensure no pure neon saturated primaries (e.g. #ff0000, #00ff00, #0000ff)
+        gaudy_colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff"]
+        for color_val in THEME_COLORS.values():
+            assert color_val.lower() not in gaudy_colors
+

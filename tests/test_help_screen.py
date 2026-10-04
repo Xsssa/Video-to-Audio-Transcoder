@@ -47,7 +47,8 @@ def test_shortcut_categories_structure():
 
     # Actions items
     action_keys = [k for k, _ in SHORTCUT_CATEGORIES["ACTIONS"]]
-    assert "a" in action_keys
+    assert any("a" in k for k in action_keys)
+    assert any("b" in k for k in action_keys)
     assert "v" in action_keys
     assert "s" in action_keys
 

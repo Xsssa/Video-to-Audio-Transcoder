@@ -33,6 +33,25 @@ from textual.widgets import Static
 from core.ffmpeg_finder import _get_creation_flags, find_ffmpeg, get_ffmpeg_version
 from ui.ascii_visualizer import is_unicode_supported
 
+try:
+    from ui.tui_theme import (
+        BORDER_SUBTLE,
+        BORDER_FOCUS,
+        ACCENT_PRIMARY,
+        TEXT_PRIMARY,
+        TEXT_SECONDARY,
+        TEXT_MUTED,
+        THEME_COLORS,
+    )
+except ImportError:
+    BORDER_SUBTLE = "#242938"
+    BORDER_FOCUS = "#3d5470"
+    ACCENT_PRIMARY = "#4ba3be"
+    TEXT_PRIMARY = "#e1e4ec"
+    TEXT_SECONDARY = "#9aa2b4"
+    TEXT_MUTED = "#5e6678"
+    THEME_COLORS = {}
+
 
 # =============================================================================
 # Hardware & Telemetry Data Models
@@ -275,8 +294,9 @@ def sample_resource_telemetry(
 # =============================================================================
 
 # Sparkline blocks
+# Ensure index 0 uses visible baseline block (U+2581) to prevent Rich word wrapping on low-usage cores
 _UNICODE_SPARKLINE = [" ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-_ASCII_SPARKLINE = [" ", ".", ":", "-", "=", "+", "#", "#", "@"]
+_ASCII_SPARKLINE = [".", ":", "-", "=", "+", "*", "#", "#", "@"]
 
 # Bar characters
 _UNICODE_FILL = "█"
@@ -291,7 +311,7 @@ def render_sparkline(values: List[float], safe_ascii: bool = False, max_items: i
     Uses subdued shades (dim slate -> crisp silver white) with zero gaudy neon.
     """
     steps = _ASCII_SPARKLINE if safe_ascii else _UNICODE_SPARKLINE
-    text = Text("[", style="dim #64748b")
+    text = Text("[", style="dim #5e6678", no_wrap=True)
     trimmed = values[:max_items]
 
     for val in trimmed:
@@ -309,16 +329,17 @@ def render_sparkline(values: List[float], safe_ascii: bool = False, max_items: i
 
         text.append(char, style=char_style)
 
-    text.append("]", style="dim #64748b")
+    text.append("]", style="dim #5e6678")
+    text.no_wrap = True
     return text
 
 
 def render_mini_bar(
     percent: float,
-    width: int = 12,
+    width: int = 10,
     safe_ascii: bool = False,
     fill_style: str = "#cbd5e1",
-    empty_style: str = "#334155",
+    empty_style: str = "#242938",
 ) -> Text:
     """
     Renders a sleek monochrome progress bar of specified character width.
@@ -328,14 +349,15 @@ def render_mini_bar(
 
     clamped = max(0.0, min(100.0, percent))
     fill_count = int(round((clamped / 100.0) * width))
-    empty_count = width - fill_count
+    empty_count = max(0, width - fill_count)
 
-    bar = Text("[", style="dim #64748b")
+    bar = Text("[", style="dim #5e6678", no_wrap=True)
     if fill_count > 0:
         bar.append(fill_char * fill_count, style=fill_style)
     if empty_count > 0:
         bar.append(empty_char * empty_count, style=empty_style)
-    bar.append("]", style="dim #64748b")
+    bar.append("]", style="dim #5e6678")
+    bar.no_wrap = True
     return bar
 
 
@@ -343,69 +365,158 @@ def render_resource_monitor_table(
     snapshot: ResourceTelemetrySnapshot,
     safe_ascii: bool = False,
     compact: bool = False,
+    width: Optional[int] = None,
 ) -> Table:
     """
     Constructs a clean Rich Table with telemetry metrics.
     Implements sleek minimalist dark styling (charcoal/slate/crisp silver).
+    Left column labels have consistent width.
+    Right column value cells never wrap awkwardly even in narrow panels.
     """
+    is_compact = compact or (width is not None and width < 45)
+
+    # Left column width: 8 for compact/narrow (CPU:, RAM:, WORKERS:, GPU:, FFMPEG:),
+    # or 11 for standard/wide (CPU CORES:, RAM USAGE:, WORKERS:, GPU ACCEL:, FFMPEG:).
+    col_metric_width = 8 if is_compact else 11
+
     table = Table.grid(expand=True, padding=(0, 1))
-    table.add_column("Metric", style="bold #94a3b8", width=14 if not compact else 10, no_wrap=True)
-    table.add_column("Value", style="#e2e8f0", ratio=1)
+    table.add_column("Metric", style="bold #94a3b8", width=col_metric_width, no_wrap=True)
+    table.add_column("Value", style="#e2e8f0", ratio=1, no_wrap=True, overflow="ellipsis")
 
-    # 1. CPU Usage & Per-Core Sparkline
+    if is_compact:
+        lbl_cpu = "CPU:"
+        lbl_ram = "RAM:"
+        lbl_workers = "WORKERS:"
+        lbl_gpu = "GPU:"
+        lbl_ffmpeg = "FFMPEG:"
+    else:
+        lbl_cpu = "CPU CORES:"
+        lbl_ram = "RAM USAGE:"
+        lbl_workers = "WORKERS:"
+        lbl_gpu = "GPU ACCEL:"
+        lbl_ffmpeg = "FFMPEG:"
+
+    # -------------------------------------------------------------------------
+    # Row 1: CPU core usage with sparkline and percentage
+    # -------------------------------------------------------------------------
     core_count = len(snapshot.cpu_per_core)
-    cpu_val = Text(f"{snapshot.cpu_percent_overall:>4.1f}% ", style="bold #f8fafc")
-    spark = render_sparkline(snapshot.cpu_per_core, safe_ascii=safe_ascii, max_items=16)
-    cpu_val.append_text(spark)
-    cpu_val.append(f" ({core_count}C)", style="dim #64748b")
-    table.add_row("CPU CORES:", cpu_val)
+    cpu_val = Text(no_wrap=True)
+    cpu_val.append(f"{snapshot.cpu_percent_overall:>4.1f}% ", style="bold #f8fafc")
 
-    # 2. RAM Utilization (used / total GB and %)
-    ram_bar = render_mini_bar(snapshot.ram_percent, width=10 if compact else 12, safe_ascii=safe_ascii)
-    ram_val = Text(f"{snapshot.ram_used_gb:.1f}/{snapshot.ram_total_gb:.0f} GB ", style="#e2e8f0")
+    spark_items = 6 if (width is not None and width < 34) else (8 if is_compact else 16)
+    spark = render_sparkline(snapshot.cpu_per_core, safe_ascii=safe_ascii, max_items=spark_items)
+    cpu_val.append_text(spark)
+
+    if width is not None and width < 33:
+        cpu_val.append(f" {core_count}C", style="dim #64748b")
+    else:
+        cpu_val.append(f" ({core_count}C)", style="dim #64748b")
+
+    table.add_row(lbl_cpu, cpu_val)
+
+    # -------------------------------------------------------------------------
+    # Row 2: RAM usage with progress bar and GB ratio
+    # -------------------------------------------------------------------------
+    ram_val = Text(no_wrap=True)
+    ram_bar_w = 6 if (width is not None and width < 38) else (8 if is_compact else 12)
+    ram_bar = render_mini_bar(snapshot.ram_percent, width=ram_bar_w, safe_ascii=safe_ascii)
+
+    if is_compact:
+        ram_ratio = f"{snapshot.ram_used_gb:.1f}/{snapshot.ram_total_gb:.0f}G "
+    else:
+        ram_ratio = f"{snapshot.ram_used_gb:.1f}/{snapshot.ram_total_gb:.0f} GB "
+
+    ram_val.append(ram_ratio, style="#e2e8f0")
     ram_val.append_text(ram_bar)
     ram_val.append(f" {snapshot.ram_percent:.0f}%", style="dim #94a3b8")
-    table.add_row("SYSTEM RAM:", ram_val)
+    table.add_row(lbl_ram, ram_val)
 
-    # 3. Active Conversion Threads vs Max Workers
+    # -------------------------------------------------------------------------
+    # Row 3: Active workers / concurrency bar
+    # -------------------------------------------------------------------------
+    workers_val = Text(no_wrap=True)
+    w_bar_w = 6 if (width is not None and width < 38) else (8 if is_compact else 10)
+    concurrency_pct = (snapshot.active_workers / max(1, snapshot.max_workers)) * 100.0
     workers_bar = render_mini_bar(
-        (snapshot.active_workers / max(1, snapshot.max_workers)) * 100.0,
-        width=8,
+        concurrency_pct,
+        width=w_bar_w,
         safe_ascii=safe_ascii,
         fill_style="bold #f8fafc",
     )
     worker_status = "BUSY" if snapshot.active_workers > 0 else "IDLE"
-    workers_val = Text(f"{snapshot.active_workers}/{snapshot.max_workers} threads ", style="#e2e8f0")
+    status_style = "bold #cbd5e1" if snapshot.active_workers > 0 else "dim #5e6678"
+
+    if is_compact:
+        workers_val.append(f"{snapshot.active_workers}/{snapshot.max_workers} ", style="#e2e8f0")
+    else:
+        workers_val.append(f"{snapshot.active_workers}/{snapshot.max_workers} workers ", style="#e2e8f0")
+
     workers_val.append_text(workers_bar)
-    workers_val.append(f" [{worker_status}]", style="bold #cbd5e1" if snapshot.active_workers > 0 else "dim #64748b")
-    table.add_row("WORKERS:", workers_val)
+    workers_val.append(f" [{worker_status}]", style=status_style)
+    table.add_row(lbl_workers, workers_val)
 
-    # 4. GPU Hardware Acceleration Status
-    gpu_val = Text()
+    # -------------------------------------------------------------------------
+    # Row 4: GPU acceleration status
+    # -------------------------------------------------------------------------
+    gpu_val = Text(no_wrap=True)
     if snapshot.gpu_info.available:
-        gpu_val.append("[OK] ", style="bold #f8fafc")
-        gpu_val.append(snapshot.gpu_info.status_text, style="#e2e8f0")
-    else:
-        gpu_val.append("GPU: Auto-Accelerated", style="#94a3b8")
-    table.add_row("GPU ACCEL:", gpu_val)
+        gpu_val.append("[OK] ", style="bold #72a37d")
+        raw_gpu = snapshot.gpu_info.status_text
+        if raw_gpu.startswith("GPU: "):
+            raw_gpu = raw_gpu[5:]
 
-    # 5. FFmpeg Binary Status
-    ffmpeg_val = Text()
-    if snapshot.ffmpeg_info.is_ok:
-        ffmpeg_val.append("[OK] ", style="bold #f8fafc")
-        # Format binary path cleanly
-        path_str = snapshot.ffmpeg_info.path
-        if compact and len(path_str) > 28:
-            path_str = "..." + path_str[-25:]
-        ffmpeg_val.append(f"{path_str} ", style="#cbd5e1")
-        if snapshot.ffmpeg_info.version and snapshot.ffmpeg_info.version != "N/A":
-            v_str = snapshot.ffmpeg_info.version
-            if len(v_str) > 16:
-                v_str = v_str[:16]
-            ffmpeg_val.append(f"({v_str})", style="dim #64748b")
+        if is_compact:
+            disp_gpu = (
+                snapshot.gpu_info.engine
+                if (snapshot.gpu_info.engine and snapshot.gpu_info.engine != "None")
+                else raw_gpu
+            )
+            if width is not None and width < 32 and len(disp_gpu) > 12:
+                disp_gpu = disp_gpu[:12]
+            gpu_val.append(disp_gpu, style="#e2e8f0")
+        else:
+            gpu_val.append(raw_gpu, style="#e2e8f0")
     else:
-        ffmpeg_val.append("[FAIL] Binary Not Found", style="bold #ef4444")
-    table.add_row("FFMPEG:", ffmpeg_val)
+        gpu_val.append("[--] ", style="dim #5e6678")
+        gpu_val.append("Software (CPU)", style="#94a3b8")
+    table.add_row(lbl_gpu, gpu_val)
+
+    # -------------------------------------------------------------------------
+    # Row 5: FFmpeg binary status
+    # -------------------------------------------------------------------------
+    ffmpeg_val = Text(no_wrap=True)
+    if snapshot.ffmpeg_info.is_ok:
+        ffmpeg_val.append("[OK] ", style="bold #72a37d")
+        path_str = snapshot.ffmpeg_info.path
+        ver_str = (
+            snapshot.ffmpeg_info.version
+            if (snapshot.ffmpeg_info.version and snapshot.ffmpeg_info.version != "N/A")
+            else ""
+        )
+        if ver_str.lower().startswith("n"):
+            ver_str = ver_str[1:]
+        if "-" in ver_str:
+            ver_str = ver_str.split("-")[0]
+        if len(ver_str) > 8:
+            ver_str = ver_str[:8]
+
+        if is_compact:
+            base_name = "ffmpeg" if (width is not None and width < 38) else (Path(path_str).name if path_str else "ffmpeg")
+            if ver_str:
+                ffmpeg_val.append(f"{base_name} ", style="#cbd5e1")
+                ffmpeg_val.append(f"({ver_str})", style="dim #64748b")
+            else:
+                ffmpeg_val.append(base_name, style="#cbd5e1")
+        else:
+            if len(path_str) > 30:
+                path_str = "..." + path_str[-27:]
+            ffmpeg_val.append(f"{path_str} ", style="#cbd5e1")
+            if ver_str:
+                ffmpeg_val.append(f"({ver_str})", style="dim #64748b")
+    else:
+        ffmpeg_val.append("[FAIL] ", style="bold #b36262")
+        ffmpeg_val.append("Binary Not Found", style="#b36262")
+    table.add_row(lbl_ffmpeg, ffmpeg_val)
 
     return table
 
@@ -414,17 +525,30 @@ def render_resource_monitor_panel(
     snapshot: ResourceTelemetrySnapshot,
     safe_ascii: bool = False,
     compact: bool = False,
-    border_style: str = "#334155",
+    border_style: str = BORDER_SUBTLE,
+    width: Optional[int] = None,
 ) -> Panel:
     """
     Renders the telemetry table inside a sleek minimalist dark Panel.
+    Uses dark slate border styling matching the global theme (#242938).
     """
-    table = render_resource_monitor_table(snapshot, safe_ascii=safe_ascii, compact=compact)
+    is_compact = compact or (width is not None and width < 45)
+    table = render_resource_monitor_table(
+        snapshot=snapshot,
+        safe_ascii=safe_ascii,
+        compact=is_compact,
+        width=width,
+    )
     box_type = box.ASCII if safe_ascii else box.ROUNDED
+    title = (
+        "[bold #cbd5e1]SYSTEM TELEMETRY[/]"
+        if (width is not None and width < 40)
+        else "[bold #cbd5e1]SYSTEM & HARDWARE TELEMETRY[/]"
+    )
 
     return Panel(
         table,
-        title="[bold #cbd5e1]SYSTEM & HARDWARE TELEMETRY[/]",
+        title=title,
         title_align="left",
         border_style=border_style,
         box=box_type,
@@ -550,10 +674,14 @@ class ResourceMonitorWidget(Static):
             pass
         return None
 
+    def on_resize(self, event: Any = None) -> None:
+        """Dynamically re-render layout when widget dimensions change."""
+        self.refresh_telemetry()
+
     def refresh_telemetry(self) -> None:
         """
         Samples live telemetry and updates widget content smoothly without flickering.
-        Invoked automatically every 1.0s by background timer.
+        Invoked automatically every 1.0s by background timer and on resize.
         """
         qm = self._resolve_queue_manager()
         snapshot = sample_resource_telemetry(
@@ -569,18 +697,25 @@ class ResourceMonitorWidget(Static):
         self.active_workers = snapshot.active_workers
         self.max_workers = snapshot.max_workers
 
+        # Determine widget available width
+        current_width = self.size.width if self.size.width > 0 else None
+        effective_compact = self.compact or (current_width is not None and current_width < 45)
+
         # Build clean renderable
         if self.wrap_in_panel:
             renderable: RenderableType = render_resource_monitor_panel(
                 snapshot=snapshot,
                 safe_ascii=self.safe_ascii,
-                compact=self.compact,
+                compact=effective_compact,
+                border_style=BORDER_SUBTLE,
+                width=current_width,
             )
         else:
             renderable = render_resource_monitor_table(
                 snapshot=snapshot,
                 safe_ascii=self.safe_ascii,
-                compact=self.compact,
+                compact=effective_compact,
+                width=current_width,
             )
 
         # Update Static widget content in place
@@ -599,4 +734,6 @@ __all__ = [
     "render_resource_monitor_table",
     "render_resource_monitor_panel",
     "ResourceMonitorWidget",
+    "BORDER_SUBTLE",
+    "BORDER_FOCUS",
 ]

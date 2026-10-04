@@ -32,6 +32,9 @@ except ImportError:
         "bg_root": "#0d0f14",
         "bg_surface": "#13161f",
         "bg_footer": "#10121a",
+        "bg_card": "#181c28",
+        "border_dim": "#1b1f2b",
+        "border_subtle": "#242938",
         "text_primary": "#e1e4ec",
         "text_secondary": "#9aa2b4",
         "text_muted": "#5e6678",
@@ -71,34 +74,49 @@ class TUIStatusBar(Widget):
     TUIStatusBar {
         dock: bottom;
         height: 1;
+        min-height: 1;
+        max-height: 1;
         width: 100%;
         layout: horizontal;
         background: #10121a;
         color: #9aa2b4;
-        overflow-x: hidden;
+        overflow: hidden hidden;
     }
 
     #status-bar-left {
         width: auto;
+        max-width: 45%;
         height: 1;
         content-align: left middle;
         padding-left: 1;
         padding-right: 1;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden hidden;
     }
 
     #status-bar-center {
         width: 1fr;
+        min-width: 0;
         height: 1;
         content-align: center middle;
-        overflow: hidden;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden hidden;
+        padding-left: 1;
+        padding-right: 1;
     }
 
     #status-bar-right {
         width: auto;
+        max-width: 45%;
         height: 1;
         content-align: right middle;
         padding-left: 1;
         padding-right: 1;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden hidden;
     }
     """
 
@@ -378,8 +396,10 @@ class TUIStatusBar(Widget):
             return THEME_COLORS["status_failed_fg"], THEME_COLORS["status_failed_bg"]
         elif "WARN" in st_upper:
             return THEME_COLORS["status_warning_fg"], THEME_COLORS["status_warning_bg"]
+        elif "PEND" in st_upper or "WAIT" in st_upper or "QUEUE" in st_upper:
+            return THEME_COLORS.get("status_pending_fg", "#9e9b86"), THEME_COLORS.get("status_pending_bg", "#1f1f1c")
         else:
-            return THEME_COLORS["text_secondary"], THEME_COLORS["bg_card"]
+            return THEME_COLORS.get("text_secondary", "#9aa2b4"), THEME_COLORS.get("bg_card", "#181c28")
 
     def _format_status_badge(self, status_text: str) -> str:
         """Generate a sleek minimalist badge for the given status string.
@@ -434,7 +454,7 @@ class TUIStatusBar(Widget):
         text_primary = THEME_COLORS.get("text_primary", "#e1e4ec")
         text_dim = THEME_COLORS.get("text_muted", "#5e6678")
 
-        # GPU indicator
+        # GPU indicator pill
         gpu_val = self.gpu_status
         if isinstance(gpu_val, bool):
             gpu_str = f"[{active_accent}]ON[/]" if gpu_val else "[dim]OFF[/]"
@@ -446,7 +466,7 @@ class TUIStatusBar(Widget):
                 gpu_str = f"[{active_accent}]{val_clean.upper()}[/]"
         parts.append(f"[dim]GPU:[/] {gpu_str}")
 
-        # WATCH indicator
+        # WATCH indicator pill
         watch_val = self.watch_status
         if isinstance(watch_val, bool):
             watch_str = f"[{cyan_accent}]ON[/]" if watch_val else "[dim]OFF[/]"
@@ -455,7 +475,7 @@ class TUIStatusBar(Widget):
             watch_str = f"[{cyan_accent}]ON[/]" if w_clean in ("ON", "1", "TRUE") else "[dim]OFF[/]"
         parts.append(f"[dim]WATCH:[/] {watch_str}")
 
-        # THREADS indicator
+        # THREADS indicator pill
         th_val = self.threads_status.strip() or "0/0"
         if th_val.startswith("0/") or th_val == "0":
             parts.append(f"[dim]THREADS:[/] [dim]{th_val}[/]")
@@ -509,6 +529,7 @@ class TUIStatusBar(Widget):
         """Return full status bar Rich markup string.
 
         Useful for unit tests, console logging, or integration with Rich tables.
+        If width is specified, ensures sections fit cleanly without collision or wrapping.
         """
         badge = self._format_status_badge(self.status)
         sec_fg = THEME_COLORS.get("text_secondary", "#9aa2b4")
@@ -523,7 +544,62 @@ class TUIStatusBar(Widget):
         )
 
         right = self._format_hardware_markup()
-        return f"{left}    {center}    {right}"
+
+        if width is None:
+            return f"{left}    {center}    {right}"
+
+        # If width is specified, format layout so sections never collide or wrap
+        left_t = Text.from_markup(left)
+        right_t = Text.from_markup(right)
+        center_t = Text.from_markup(center) if center else Text("")
+
+        left_len = left_t.cell_len
+        right_len = right_t.cell_len
+        center_len = center_t.cell_len
+
+        # If everything fits with at least 4 chars padding
+        if left_len + center_len + right_len + 4 <= width:
+            remaining = width - left_len - right_len - center_len
+            pad_left = remaining // 2
+            pad_right = remaining - pad_left
+            return f"{left}" + (" " * pad_left) + f"{center}" + (" " * pad_right) + f"{right}"
+
+        # Try truncating center notification
+        avail_center = width - left_len - right_len - 4
+        if avail_center >= 6 and center:
+            trunc_c = center_t.plain[: avail_center - 1] + "…"
+            center_markup = f"[dim]{trunc_c}[/]"
+            center_len = len(trunc_c)
+            remaining = width - left_len - right_len - center_len
+            pad_left = remaining // 2
+            pad_right = remaining - pad_left
+            return f"{left}" + (" " * pad_left) + f"{center_markup}" + (" " * pad_right) + f"{right}"
+
+        # Drop center notification
+        if left_len + right_len + 2 <= width:
+            pad = width - left_len - right_len
+            return f"{left}" + (" " * pad) + f"{right}"
+
+        # Truncate preset from left
+        badge_len = Text.from_markup(badge).cell_len
+        if badge_len + right_len + 2 <= width:
+            avail_preset = width - badge_len - right_len - 6
+            if avail_preset > 4:
+                trunc_preset = self.preset.strip()[: avail_preset - 1] + "…"
+                left = f"{badge}  [dim]|[/]  [{sec_fg}]{trunc_preset}[/]"
+                pad = width - Text.from_markup(left).cell_len - right_len
+                return f"{left}" + (" " * max(1, pad)) + f"{right}"
+            else:
+                pad = width - badge_len - right_len
+                return f"{badge}" + (" " * max(1, pad)) + f"{right}"
+
+        # Truncate right pills if necessary
+        avail_for_right = max(0, width - badge_len - 2)
+        if avail_for_right > 8:
+            right_trunc = right_t.plain[: avail_for_right - 1] + "…"
+            pad = max(1, width - badge_len - len(right_trunc))
+            return f"{badge}" + (" " * pad) + f"{right_trunc}"
+        return badge
 
     def render_rich_text(self, width: Optional[int] = None) -> Text:
         """Return status bar as a styled Rich Text object."""

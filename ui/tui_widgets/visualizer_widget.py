@@ -79,6 +79,10 @@ STYLE_ACCENT_CYAN = "#6c9da8"
 STYLE_ACCENT_SLATE = "#58768a"
 STYLE_ACCENT_DIM = "#475968"
 
+# Mode Switcher Tabs - Slate Cyan Accent Highlight & Dim Inactive
+STYLE_TAB_ACTIVE = f"bold {STYLE_ACCENT_CYAN} on {STYLE_ACTIVE_BG}"
+STYLE_TAB_INACTIVE = f"dim {STYLE_TEXT_DIM}"
+
 # Meter Bars - Graduated Slate to Crisp White Transient
 STYLE_BAR_EMPTY = "dim #2a3440"
 STYLE_BAR_LOW = "#455869"
@@ -328,6 +332,7 @@ class AudioVisualizerWidget(Widget):
         background: transparent;
         padding: 0;
         margin: 0;
+        overflow: hidden hidden;
     }
     AudioVisualizerWidget:focus {
         border: none;
@@ -506,7 +511,7 @@ class AudioVisualizerWidget(Widget):
         Clicking on top header tab switches directly to that mode.
         Clicking anywhere else cycles modes.
         """
-        if event.y <= 1 and self._tab_hitboxes:
+        if event.y == 0 and self._tab_hitboxes:
             for start_x, end_x, tab_mode in self._tab_hitboxes:
                 if start_x <= event.x <= end_x:
                     self.set_mode(tab_mode)
@@ -547,59 +552,71 @@ class AudioVisualizerWidget(Widget):
     def _render_header_row(self, width: int, mode_hint: str = "") -> Text:
         """
         Renders sleek top tab bar:
-        [A: SPECTRUM]  [B: OSCILLO]  [C: COMPACT]      ● ACTIVE  3.2x
+        [SPECTRUM] [OSCILLOSCOPE] [COMPACT]      ● LIVE  3.2x
         """
         out = Text()
         col_pos = 0
 
-        # Tabs configuration adapted to available width
-        if width < 32:
+        # Tabs configuration: Clean tab bar [SPECTRUM], [OSCILLOSCOPE], [COMPACT]
+        if width >= 36:
             tabs = [
-                (VisualizerMode.SPECTRUM, "A", "A"),
-                (VisualizerMode.OSCILLOSCOPE, "B", "B"),
-                (VisualizerMode.COMPACT, "C", "C"),
+                (VisualizerMode.SPECTRUM, "[SPECTRUM]"),
+                (VisualizerMode.OSCILLOSCOPE, "[OSCILLOSCOPE]"),
+                (VisualizerMode.COMPACT, "[COMPACT]"),
             ]
-        elif width < 48:
+        elif width >= 26:
             tabs = [
-                (VisualizerMode.SPECTRUM, "A: EQ", "A: EQ"),
-                (VisualizerMode.OSCILLOSCOPE, "B: OSC", "B: OSC"),
-                (VisualizerMode.COMPACT, "C: LVL", "C: LVL"),
+                (VisualizerMode.SPECTRUM, "[SPEC]"),
+                (VisualizerMode.OSCILLOSCOPE, "[OSC]"),
+                (VisualizerMode.COMPACT, "[COMP]"),
             ]
         else:
             tabs = [
-                (VisualizerMode.SPECTRUM, "A: SPECTRUM", "A: SPECTRUM"),
-                (VisualizerMode.OSCILLOSCOPE, "B: OSCILLO", "B: OSCILLO"),
-                (VisualizerMode.COMPACT, "C: COMPACT", "C: COMPACT"),
+                (VisualizerMode.SPECTRUM, "[S]"),
+                (VisualizerMode.OSCILLOSCOPE, "[O]"),
+                (VisualizerMode.COMPACT, "[C]"),
             ]
 
-        for v_mode, full_label, short_label in tabs:
-            lbl = full_label
+        # Reset hitboxes for this render pass
+        self._tab_hitboxes = []
+
+        # Optional left margin if space permits
+        has_left_pad = (width >= 40)
+        if has_left_pad:
+            out.append(" ")
+            col_pos = 1
+
+        for idx, (v_mode, lbl) in enumerate(tabs):
             is_current = (self.mode == v_mode)
 
             start_col = col_pos
             if is_current:
-                out.append(f" {lbl} ", style=f"bold {STYLE_TEXT_BRIGHT} on {STYLE_ACTIVE_BG}")
-                col_pos += len(lbl) + 2
+                out.append(lbl, style=STYLE_TAB_ACTIVE)
             else:
-                out.append(f" {lbl} ", style=f"{STYLE_TEXT_DIM} on {STYLE_MUTED_BG}")
-                col_pos += len(lbl) + 2
-
+                out.append(lbl, style=STYLE_TAB_INACTIVE)
+            col_pos += len(lbl)
             end_col = col_pos - 1
+
             self._tab_hitboxes.append((start_col, end_col, v_mode))
-            out.append(" ", style="default")
-            col_pos += 1
+
+            if idx < len(tabs) - 1:
+                out.append(" ", style="default")
+                col_pos += 1
 
         # Status badge aligned right if space permits
         status_text = self._build_status_badge()
         status_len = len(status_text.plain)
-        if col_pos + status_len < width:
-            padding_len = max(1, width - col_pos - status_len)
+        if col_pos + status_len + 2 <= width:
+            padding_len = max(1, width - col_pos - status_len - 1)
             out.append(" " * padding_len)
             out.append_text(status_text)
-        elif col_pos + 3 <= width:
+        elif col_pos + 4 <= width:
             bullet = "*" if self.safe_ascii else "●"
-            out.append(" " * (width - col_pos - 2))
+            out.append(" " * (width - col_pos - 3))
             out.append(f"{bullet} ", style=f"bold {STYLE_ACCENT_CYAN}" if self.is_active else f"{STYLE_TEXT_DIM}")
+
+        if len(out.plain) >= width:
+            out = out[:width - 1]
 
         return out
 
@@ -624,7 +641,7 @@ class AudioVisualizerWidget(Widget):
 
     def _render_mode_spectrum(self, width: int, height: int) -> RenderableType:
         table = Table.grid(padding=(0, 0), expand=True)
-        table.add_column("Display", justify="left")
+        table.add_column("Display", justify="left", no_wrap=True)
 
         # 1. Header with Mode Tabs (1 row)
         table.add_row(self._render_header_row(width))
@@ -669,7 +686,7 @@ class AudioVisualizerWidget(Widget):
         suffix_r = f"] {db_r}" + (f"  PK {pk_r}" if show_peak else "")
 
         overhead = len(prefix) + max(len(suffix_l), len(suffix_r)) + 1
-        bar_w = max(4, min(36, width - overhead))
+        bar_w = max(4, width - overhead - 1)
 
         line_l = Text()
         line_l.append(prefix, style=f"bold {STYLE_ACCENT_SLATE}")
@@ -677,6 +694,8 @@ class AudioVisualizerWidget(Widget):
         line_l.append(f"] {db_l}", style=f"{STYLE_TEXT_NORMAL}")
         if show_peak:
             line_l.append(f"  PK {pk_l}", style=f"{STYLE_TEXT_DIM}")
+        if len(line_l.plain) >= width:
+            line_l = line_l[:width - 1]
         lines.append(line_l)
 
         line_r = Text()
@@ -685,6 +704,8 @@ class AudioVisualizerWidget(Widget):
         line_r.append(f"] {db_r}", style=f"{STYLE_TEXT_NORMAL}")
         if show_peak:
             line_r.append(f"  PK {pk_r}", style=f"{STYLE_TEXT_DIM}")
+        if len(line_r.plain) >= width:
+            line_r = line_r[:width - 1]
         lines.append(line_r)
 
         if show_scale and width >= 40:
@@ -697,6 +718,8 @@ class AudioVisualizerWidget(Widget):
             right_pad = max(1, bar_w - mid_pad - 8)
             scale_line.append(" " * right_pad)
             scale_line.append("0 dB", style=f"{STYLE_TEXT_DIM}")
+            if len(scale_line.plain) >= width:
+                scale_line = scale_line[:width - 1]
             lines.append(scale_line)
 
         return lines
@@ -721,6 +744,8 @@ class AudioVisualizerWidget(Widget):
         out.append(prefix_r, style=f"{STYLE_BORDER_DIM}")
         self._append_meter_bar(out, self.physics.cur_r_db, self.physics.peak_r_db, bar_w)
         out.append(suffix_r, style=f"{STYLE_BORDER_DIM}")
+        if len(out.plain) >= width:
+            out = out[:width - 1]
         return out
 
     def _append_meter_bar(self, text_obj: Text, db_val: float, peak_db: float, width: int) -> None:
@@ -772,13 +797,14 @@ class AudioVisualizerWidget(Widget):
             has_labels = True
 
         col_w = max(1, (width - 2) // 7)
+        left_pad = max(1, (width - (7 * col_w)) // 2)
         fill_char = "|" if self.safe_ascii else "█"
         peak_cap_char = "-" if self.safe_ascii else "▔"
         char_steps = self.physics.ASCII_BLOCK_STEPS if self.safe_ascii else self.physics.BLOCK_STEPS
 
         for r in range(bar_rows - 1, -1, -1):
             line = Text()
-            line.append(" ")
+            line.append(" " * left_pad)
             thresh_low = r / float(bar_rows)
             thresh_high = (r + 1) / float(bar_rows)
 
@@ -796,7 +822,7 @@ class AudioVisualizerWidget(Widget):
                 pk_lvl = self.physics.band_peaks[i]
 
                 has_peak_cap = (thresh_low <= pk_lvl < thresh_high) and (pk_lvl > cur_lvl + 0.05)
-                block_w = max(1, col_w if col_w == 1 else col_w - 1)
+                block_w = max(1, col_w if col_w <= 2 else col_w - 1)
 
                 if cur_lvl >= thresh_high:
                     cell = (fill_char * block_w).center(col_w)
@@ -813,20 +839,26 @@ class AudioVisualizerWidget(Widget):
                 else:
                     line.append(" " * col_w)
 
+            if len(line.plain) >= width:
+                line = line[:width - 1]
             lines.append(line)
 
         if has_labels:
             if col_w >= 6:
                 labels = self.physics.SPECTRUM_FREQS
-            elif col_w >= 3:
+            elif col_w >= 4:
                 labels = self.physics.COMPACT_FREQS
+            elif col_w >= 3:
+                labels = ["60", "150", "400", "1k", "2.5", "6k", "15"]
             else:
                 labels = ["6", "1", "4", "1", "2", "6", "1"]
 
             label_line = Text()
-            label_line.append(" ")
+            label_line.append(" " * left_pad)
             for lbl in labels:
                 label_line.append(lbl.center(col_w), style=f"{STYLE_TEXT_DIM}")
+            if len(label_line.plain) >= width:
+                label_line = label_line[:width - 1]
             lines.append(label_line)
 
         return lines
@@ -837,7 +869,7 @@ class AudioVisualizerWidget(Widget):
 
     def _render_mode_oscilloscope(self, width: int, height: int) -> RenderableType:
         table = Table.grid(padding=(0, 0), expand=True)
-        table.add_column("Oscilloscope", justify="left")
+        table.add_column("Oscilloscope", justify="left", no_wrap=True)
 
         # 1. Header with Mode Tabs (1 row)
         table.add_row(self._render_header_row(width))
@@ -851,6 +883,8 @@ class AudioVisualizerWidget(Widget):
         if self.safe_ascii:
             wave_lines = self._render_ascii_oscilloscope(canvas_w, canvas_h)
             for w_line in wave_lines:
+                if len(w_line.plain) >= width:
+                    w_line = w_line[:width - 1]
                 table.add_row(w_line)
         else:
             canvas = BrailleCanvas(canvas_w, canvas_h)
@@ -864,6 +898,8 @@ class AudioVisualizerWidget(Widget):
                 dist_from_center = abs(r_idx - mid_y)
                 row_style = f"bold {STYLE_ACCENT_CYAN}" if dist_from_center <= 1 else f"{STYLE_ACCENT_SLATE}"
                 line.append(b_row[:canvas_w], style=row_style)
+                if len(line.plain) >= width:
+                    line = line[:width - 1]
                 table.add_row(line)
 
         # 3. Footer Telemetry
@@ -871,15 +907,18 @@ class AudioVisualizerWidget(Widget):
             footer = Text()
             db_l = self._format_db(self.physics.cur_l_db)
             db_r = self._format_db(self.physics.cur_r_db)
-            if width >= 50:
+            if width >= 58:
                 footer.append(" [TRIG: AUTO] ", style=f"{STYLE_TEXT_DIM}")
                 footer.append("TIMEBASE: 2.5ms ", style=f"{STYLE_TEXT_MUTED}")
                 footer.append(f"| L: {db_l} | R: {db_r}", style=f"{STYLE_TEXT_DIM}")
-            elif width >= 30:
+            elif width >= 36:
                 footer.append(" [AUTO] ", style=f"{STYLE_TEXT_DIM}")
                 footer.append(f"L: {db_l} | R: {db_r}", style=f"{STYLE_TEXT_DIM}")
             else:
                 footer.append(f" {db_l} / {db_r}", style=f"{STYLE_TEXT_DIM}")
+
+            if len(footer.plain) >= width:
+                footer = footer[:width - 1]
             table.add_row(footer)
 
         return table
@@ -973,14 +1012,17 @@ class AudioVisualizerWidget(Widget):
 
     def _render_mode_compact(self, width: int, height: int) -> RenderableType:
         table = Table.grid(padding=(0, 0), expand=True)
-        table.add_column("Compact", justify="left")
+        table.add_column("Compact", justify="left", no_wrap=True)
 
-        # 1. Header with Mode Tabs
+        # 1. Header with Mode Tabs (1 row)
         table.add_row(self._render_header_row(width))
 
         # 2. Dual Horizontal Precision Meters
         remaining = max(1, height - 1)
-        bar_len = max(4, width - (26 if width >= 38 else 16))
+        show_peak = (width >= 42)
+        overhead = 30 if show_peak else 18
+        bar_len = max(4, width - overhead)
+
         table.add_row(self._render_compact_meter_line("CH1", self.physics.cur_l_db, self.physics.peak_l_db, bar_len, width))
         if remaining >= 2:
             table.add_row(self._render_compact_meter_line("CH2", self.physics.cur_r_db, self.physics.peak_r_db, bar_len, width))
@@ -991,20 +1033,22 @@ class AudioVisualizerWidget(Widget):
             rms_l = max(-60.0, self.physics.cur_l_db - 3.2)
             metrics_line.append(" RMS: ", style=f"{STYLE_TEXT_DIM}")
             metrics_line.append(self._format_db(rms_l), style=f"{STYLE_TEXT_NORMAL}")
-            if width >= 36:
+            if width >= 40:
                 metrics_line.append(" | PEAK: ", style=f"{STYLE_TEXT_DIM}")
                 metrics_line.append(self._format_db(self.physics.peak_l_db), style=f"{STYLE_TEXT_BRIGHT}")
-            if width >= 48:
+            if width >= 54:
                 metrics_line.append(" | CREST: ", style=f"{STYLE_TEXT_DIM}")
                 crest = max(0.0, self.physics.peak_l_db - rms_l)
                 metrics_line.append(f"{crest:.1f} dB", style=f"{STYLE_TEXT_NORMAL}")
+            if len(metrics_line.plain) >= width:
+                metrics_line = metrics_line[:width - 1]
             table.add_row(metrics_line)
 
         # 4. Inline 7-Band Energy Indicators
-        if remaining >= 4 and width >= 30:
+        if remaining >= 4 and width >= 34:
             energy_line = Text()
-            energy_line.append(" EQ:  ", style=f"{STYLE_TEXT_DIM}")
-            labels = ["60", "150", "400", "1k", "2.5k", "6k", "15k"]
+            energy_line.append(" EQ: ", style=f"{STYLE_TEXT_DIM}")
+            labels = ["60", "150", "400", "1k", "2.5k", "6k", "15k"] if width >= 50 else ["60", "15", "40", "1k", "2k", "6k", "15"]
             steps = self.physics.ASCII_BLOCK_STEPS if self.safe_ascii else self.physics.BLOCK_STEPS
 
             for i in range(7):
@@ -1014,6 +1058,8 @@ class AudioVisualizerWidget(Widget):
                 energy_line.append(f"{labels[i]}:", style=f"{STYLE_TEXT_DIM}")
                 energy_line.append(f"{ch} ", style=f"{STYLE_BAR_HIGH if lvl > 0.6 else STYLE_BAR_LOW}")
 
+            if len(energy_line.plain) >= width:
+                energy_line = energy_line[:width - 1]
             table.add_row(energy_line)
 
         # 5. Pipeline Telemetry
@@ -1022,7 +1068,10 @@ class AudioVisualizerWidget(Widget):
             pipe_line.append(" THREADS: ", style=f"{STYLE_TEXT_DIM}")
             pipe_line.append(f"{self.worker_count}w", style=f"{STYLE_TEXT_NORMAL}")
             pipe_line.append(" | ", style=f"{STYLE_TEXT_DIM}")
-            pipe_line.append("ENCODING" if self.is_active else "IDLE", style=f"{STYLE_TEXT_BRIGHT if self.is_active else STYLE_TEXT_DIM}")
+            status_str = "ENCODING" if self.is_active else "IDLE"
+            pipe_line.append(status_str, style=f"{STYLE_TEXT_BRIGHT if self.is_active else STYLE_TEXT_DIM}")
+            if len(pipe_line.plain) >= width:
+                pipe_line = pipe_line[:width - 1]
             table.add_row(pipe_line)
 
         return table
@@ -1037,7 +1086,7 @@ class AudioVisualizerWidget(Widget):
     ) -> Text:
         """Renders single channel row for Mode C."""
         line = Text()
-        show_peak = (total_width >= 36)
+        show_peak = (total_width >= 42)
         prefix = f" {channel_label} [" if total_width >= 28 else f"{channel_label}["
         line.append(prefix, style=f"{STYLE_BORDER_DIM}")
         self._append_meter_bar(line, cur_db, peak_db, bar_width)
@@ -1045,6 +1094,8 @@ class AudioVisualizerWidget(Widget):
         line.append(self._format_db(cur_db), style=f"{STYLE_TEXT_NORMAL}")
         if show_peak:
             line.append(f" MAX {self._format_db(peak_db)}", style=f"{STYLE_TEXT_DIM}")
+        if len(line.plain) >= total_width:
+            line = line[:total_width - 1]
         return line
 
     # -------------------------------------------------------------------------
@@ -1053,7 +1104,7 @@ class AudioVisualizerWidget(Widget):
 
     def _render_minimal_fallback(self, width: int, height: int) -> RenderableType:
         table = Table.grid(padding=(0, 0), expand=True)
-        table.add_column("Mini", justify="left")
+        table.add_column("Mini", justify="left", no_wrap=True)
 
         line = Text()
         bullet = "*" if self.safe_ascii else "●"
@@ -1061,13 +1112,17 @@ class AudioVisualizerWidget(Widget):
         line.append(f"{bullet} ", style=status_style)
         line.append("AUDIO: ", style=f"{STYLE_TEXT_DIM}")
         line.append(self._format_db(self.physics.cur_l_db), style=f"{STYLE_TEXT_NORMAL}")
+        if len(line.plain) >= width:
+            line = line[:width - 1]
         table.add_row(line)
 
         if height > 1:
             line2 = Text()
-            bar_len = max(4, width - 4)
+            bar_len = max(2, width - 4)
             fill_cnt = int(round(max(0.0, min(1.0, (self.physics.cur_l_db + 48.0) / 48.0)) * bar_len))
             line2.append("[" + ("=" * fill_cnt) + (" " * (bar_len - fill_cnt)) + "]", style=f"{STYLE_TEXT_DIM}")
+            if len(line2.plain) >= width:
+                line2 = line2[:width - 1]
             table.add_row(line2)
 
         return table

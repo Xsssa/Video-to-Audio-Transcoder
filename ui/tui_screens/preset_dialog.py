@@ -283,47 +283,60 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
 
     #preset-dialog-box {
         width: 78;
-        max-width: 95%;
-        height: auto;
-        max-height: 92%;
-        background: #131317;
-        border: solid #2c2c36;
-        padding: 1 2;
+        max-width: 98%;
+        height: 22;
+        background: #10121a;
+        border: round #262a38;
+        padding: 0 1;
     }
 
     #dialog-header {
-        height: auto;
-        border-bottom: solid #22222a;
-        margin-bottom: 1;
-        padding-bottom: 1;
+        height: 2;
+        width: 100%;
+        margin: 0;
+        padding: 0;
     }
 
     #dialog-title {
         text-style: bold;
         color: #e4e4eb;
+        height: 1;
     }
 
     #dialog-subtitle {
-        color: #727282;
+        color: #5e6678;
+        height: 1;
     }
 
     #columns-container {
-        height: auto;
-        margin-bottom: 1;
+        height: 10;
+        width: 100%;
+        margin: 0;
+        padding: 0;
     }
 
     .column-box {
-        width: 1fr;
-        height: auto;
-        border: solid #24242e;
+        height: 10;
+        border: round #202433;
         padding: 0 1;
-        background: #17171d;
+        background: #141722;
+    }
+
+    #col-format {
+        width: 33;
+        margin-right: 1;
+    }
+
+    #col-quality {
+        width: 1fr;
     }
 
     .column-header {
+        height: 1;
         text-style: bold;
-        color: #8e8e9e;
-        margin-bottom: 1;
+        color: #8e95a5;
+        margin: 0;
+        padding: 0;
     }
 
     /* RadioSet minimalist styling */
@@ -331,7 +344,8 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
         background: transparent;
         border: none;
         padding: 0;
-        margin-bottom: 1;
+        margin: 0;
+        height: auto;
     }
 
     #format-radios RadioButton,
@@ -339,7 +353,7 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
     #flac-radios RadioButton,
     #wav-radios RadioButton {
         background: transparent;
-        color: #b0b0bc;
+        color: #9aa2b4;
         height: 1;
         margin: 0;
         padding: 0;
@@ -356,7 +370,7 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
     #lossy-radios RadioButton.-selected,
     #flac-radios RadioButton.-selected,
     #wav-radios RadioButton.-selected {
-        color: #f2f2f7;
+        color: #5cbcdb;
         text-style: bold;
     }
 
@@ -371,49 +385,82 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
 
     /* Live description panel */
     #desc-panel {
-        background: #17171d;
-        border: solid #24242e;
-        padding: 1 1;
-        height: 8;
-        margin-bottom: 1;
-        color: #b8b8c4;
+        background: #141722;
+        border: round #202433;
+        padding: 0 1;
+        height: 5;
+        margin: 0;
+        color: #b0b0c0;
+        width: 100%;
     }
 
     /* Button actions */
     #button-row {
         height: 3;
+        width: 100%;
+        margin: 0;
+        padding: 0;
         align: right middle;
     }
 
+    #dialog-shortcuts {
+        width: 1fr;
+        height: 3;
+        content-align: left middle;
+        color: #5e6678;
+        padding-left: 1;
+    }
+
     #btn-cancel {
-        background: #1f1f27;
-        color: #9292a0;
-        border: none;
-        margin-right: 1;
+        height: 3;
         min-width: 14;
+        background: #141722;
+        color: #9aa2b4;
+        border: solid #242938;
+        margin-right: 1;
+        padding: 0 2;
+        text-align: center;
     }
 
     #btn-cancel:hover {
-        background: #2a2a35;
-        color: #e4e4eb;
+        background: #1d2332;
+        color: #e1e4ec;
+        border: solid #3d5470;
+    }
+
+    #btn-cancel:focus {
+        background: #1d2332;
+        color: #ffffff;
+        border: solid #4ba3be;
     }
 
     #btn-apply {
-        background: #283647;
-        color: #f0f4f8;
-        border: none;
-        min-width: 20;
+        height: 3;
+        min-width: 18;
+        background: #1c3547;
+        color: #e1e4ec;
+        border: solid #2e5570;
+        text-style: bold;
+        padding: 0 2;
+        text-align: center;
     }
 
     #btn-apply:hover {
-        background: #36475d;
+        background: #254659;
         color: #ffffff;
+        border: solid #5cbcdb;
+    }
+
+    #btn-apply:focus {
+        background: #254659;
+        color: #ffffff;
+        border: solid #5cbcdb;
     }
     """
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel", show=True),
-        Binding("enter", "apply", "Apply Preset", show=True),
+        Binding("enter", "apply", "Apply Preset", show=True, priority=True),
         Binding("ctrl+s", "apply", "Save", show=False),
     ]
 
@@ -458,7 +505,7 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
             # Main Body Columns
             with Horizontal(id="columns-container"):
                 # Left Column: Format selection
-                with Vertical(classes="column-box"):
+                with Vertical(id="col-format", classes="column-box"):
                     yield Label("OUTPUT FORMAT", classes="column-header")
                     yield RadioSet(
                         RadioButton(
@@ -500,7 +547,7 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
                     )
 
                 # Right Column: Quality / Bitrate presets
-                with Vertical(classes="column-box"):
+                with Vertical(id="col-quality", classes="column-box"):
                     yield Label("QUALITY & BITRATE", classes="column-header")
 
                     # Lossy presets (MP3, AAC, OPUS, OGG, M4A)
@@ -550,13 +597,20 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
 
             # Actions Button Row
             with Horizontal(id="button-row"):
-                yield Button("Cancel (Esc)", id="btn-cancel")
-                yield Button("Apply Preset (Enter)", id="btn-apply")
+                yield Label("Esc: Cancel  •  Enter: Apply", id="dialog-shortcuts")
+                yield Button("Cancel", id="btn-cancel")
+                yield Button("Apply Preset", id="btn-apply")
 
     def on_mount(self) -> None:
         """Configure widget visibility and trigger initial description update."""
         self._update_quality_set_visibility()
         self._update_description()
+
+        try:
+            panel = self.query_one("#desc-panel", Static)
+            panel.border_title = "PROFILE SPECIFICATIONS"
+        except Exception:
+            pass
 
         # Place initial focus on format selector for immediate keyboard accessibility
         try:
@@ -742,14 +796,14 @@ class PresetDialogModal(ModalScreen[Optional[Dict[str, Any]]]):
         quality_meta = self._get_active_quality_metadata()
 
         lines: list[str] = [
-            f"[bold #e0e0e8]{fmt_meta.name}[/] [dim]({fmt_meta.full_name} • Codec: {fmt_meta.codec})[/]",
-            f"[dim #787888]Preset:[/] [bold #c8c8d4]{quality_meta.label}[/] [dim]— {quality_meta.description}[/]",
-            f"[dim #7e947e]Pros:[/] [#b4b4c2]{fmt_meta.pros}[/]",
-            f"[dim #9e7e7e]Cons:[/] [#888896]{fmt_meta.cons}[/]",
-            f"[dim #7e7e94]Best For:[/] [#a4a4b2]{fmt_meta.best_for}[/]",
+            f"[bold #e4e4eb]{fmt_meta.name}[/] [dim]({fmt_meta.full_name} • Codec: {fmt_meta.codec})[/]  •  [bold #5cbcdb]{quality_meta.label}[/]",
+            f"[dim #787888]Specs:[/] [#c8c8d4]{quality_meta.description}[/]",
+            f"[dim #73daca]Pros:[/] [#b0b0c0]{fmt_meta.pros}[/]  [dim #bb9af7]• Best:[/] [#a0a0b0]{fmt_meta.best_for}[/]",
         ]
 
         text = Text.from_markup("\n".join(lines))
+        text.no_wrap = True
+        text.overflow = "ellipsis"
         panel.update(text)
 
     def _resolve_initial_lossy_preset(self) -> str:

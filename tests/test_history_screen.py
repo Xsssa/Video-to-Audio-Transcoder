@@ -367,3 +367,113 @@ async def test_history_tab_pane():
         assert tab_pane is not None
         tab_pane.refresh_history()
 
+
+@pytest.mark.asyncio
+async def test_summary_telemetry_cards_layout():
+    """Validates sleek telemetry cards for Total, Completed, Failed, Time, Saved."""
+    t_comp = create_dummy_completed_task()
+    t_fail = create_dummy_failed_task()
+    app = MockHistoryHostApp(tasks=[t_comp, t_fail])
+
+    async with app.run_test() as pilot:
+        screen = app.screen
+        # Verify all 5 cards exist
+        card_total = screen.query_one("#card-total")
+        card_completed = screen.query_one("#card-completed")
+        card_failed = screen.query_one("#card-failed")
+        card_time = screen.query_one("#card-time")
+        card_saved = screen.query_one("#card-saved")
+
+        assert "telemetry-card" in card_total.classes
+        assert "telemetry-card" in card_completed.classes
+        assert "telemetry-card" in card_failed.classes
+        assert "telemetry-card" in card_time.classes
+        assert "telemetry-card" in card_saved.classes
+
+        # Verify values rendered
+        assert "2" in str(screen.query_one("#stat-total", Label).render())
+        assert "1" in str(screen.query_one("#stat-completed", Label).render())
+        assert "1" in str(screen.query_one("#stat-failed", Label).render())
+        assert "00:06" in str(screen.query_one("#stat-time", Label).render())
+        assert "MB" in str(screen.query_one("#stat-saved", Label).render())
+
+
+@pytest.mark.asyncio
+async def test_center_datatable_column_layout():
+    """Validates DataTable clean column layout: (ID, Source, Target, Duration, Size, Ratio, Status)."""
+    t_comp = create_dummy_completed_task()
+    app = MockHistoryHostApp(tasks=[t_comp])
+
+    async with app.run_test() as pilot:
+        screen = app.screen
+        table = screen.query_one("#history-data-table", DataTable)
+
+        # Check column keys and labels
+        col_keys = [str(col.key.value) for col in table.columns.values()]
+        assert col_keys == ["id", "source", "target", "duration", "size", "ratio", "status"]
+
+        col_labels = [str(col.label) for col in table.columns.values()]
+        assert col_labels == ["ID", "Source", "Target", "Duration", "Size", "Ratio", "Status"]
+
+        # Check row content
+        row_data = table.get_row("task_completed_001")
+        assert row_data[0] == "#1"
+        assert "test_video.mp4" in str(row_data[1])
+        assert str(row_data[2]) == "MP3"
+        assert str(row_data[3]) == "02:00"
+        assert "MB" in str(row_data[4])
+        assert "-88.0%" in str(row_data[5])
+        assert "COMPLETED" in str(row_data[6])
+
+
+@pytest.mark.asyncio
+async def test_bottom_inspector_and_action_buttons():
+    """Validates inspector FFmpeg command & compression ratio and action buttons."""
+    t_comp = create_dummy_completed_task()
+    app = MockHistoryHostApp(tasks=[t_comp])
+
+    async with app.run_test() as pilot:
+        screen = app.screen
+        # Inspector panel check
+        inspector = screen.query_one("#inspector-content", Static)
+        text = str(inspector.render())
+        assert "ffmpeg" in text
+        assert "-88.0%" in text
+        assert "EBU R128" in text
+
+        # Action buttons check
+        btn_json = screen.query_one("#btn-export-json", Button)
+        btn_csv = screen.query_one("#btn-export-csv", Button)
+        btn_txt = screen.query_one("#btn-export-txt", Button)
+        btn_close = screen.query_one("#btn-close-modal", Button)
+
+        assert "action-btn" in btn_json.classes
+        assert "action-btn" in btn_csv.classes
+        assert "action-btn" in btn_txt.classes
+        assert "action-btn" in btn_close.classes
+
+
+@pytest.mark.asyncio
+async def test_standard_terminal_responsiveness_and_fit():
+    """Validates that modal dialog and action buttons fit smoothly on standard 80x24 terminal."""
+    t_comp = create_dummy_completed_task()
+    t_fail = create_dummy_failed_task()
+    app = MockHistoryHostApp(tasks=[t_comp, t_fail])
+
+    # Standard terminal dimensions: 80 cols x 24 rows
+    async with app.run_test(size=(80, 24)) as pilot:
+        screen = app.screen
+        btn_close = screen.query_one("#btn-close-modal", Button)
+        region = btn_close.region
+
+        # Ensure close button is strictly within 80x24 viewport
+        assert region.x >= 0
+        assert region.y >= 0
+        assert region.x + region.width <= 80
+        assert region.y + region.height <= 24
+
+        # Clicking dismisses modal cleanly
+        await pilot.click(btn_close)
+        await pilot.pause()
+        assert not isinstance(app.screen, HistoryModalScreen)
+

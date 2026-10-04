@@ -60,26 +60,31 @@ class TranscoderTUI(App):
         background: #0d0f14;
         color: #e1e4ec;
         layout: vertical;
+        overflow: hidden hidden;
     }
 
     #app-body {
         layout: horizontal;
         height: 1fr;
         width: 100%;
+        overflow: hidden hidden;
     }
 
     #sidebar {
         width: 22;
         dock: left;
-        padding: 1 1;
+        padding: 0 1;
         background: #10121a;
         border-right: solid #1b1f2b;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     #sidebar-title {
         text-align: center;
         text-style: bold;
         color: #e1e4ec;
+        margin-top: 1;
         margin-bottom: 1;
         border-bottom: solid #1b1f2b;
         padding-bottom: 1;
@@ -87,11 +92,15 @@ class TranscoderTUI(App):
 
     #sidebar Button {
         width: 100%;
+        height: 3;
+        min-height: 3;
+        max-height: 3;
+        padding: 0;
         margin-bottom: 1;
         background: #141722;
         color: #9aa2b4;
         border: solid #1b1f2b;
-        height: 3;
+        content-align: center middle;
     }
 
     #sidebar Button:hover {
@@ -100,11 +109,25 @@ class TranscoderTUI(App):
         border: solid #3d5470;
     }
 
+    #sidebar Button:focus {
+        background: #222a3d;
+        color: #ffffff;
+        border: solid #3d5470;
+        border-left: thick #4ba3be;
+    }
+
+    #sidebar Button:disabled {
+        background: #10121a;
+        color: #3b4252;
+        border: solid #171a26;
+    }
+
     #center-pane {
         width: 5fr;
         height: 100%;
         layout: vertical;
         padding: 0 1;
+        overflow: hidden hidden;
     }
 
     #queue-wrapper {
@@ -112,6 +135,7 @@ class TranscoderTUI(App):
         border: round #242938;
         background: #13161f;
         margin-bottom: 1;
+        overflow: hidden;
     }
 
     #queue-wrapper:focus-within {
@@ -122,6 +146,7 @@ class TranscoderTUI(App):
         height: 1fr;
         border: round #242938;
         background: #13161f;
+        overflow: hidden;
     }
 
     #log-wrapper:focus-within {
@@ -133,14 +158,21 @@ class TranscoderTUI(App):
         height: 100%;
         layout: vertical;
         padding: 0 1 0 0;
+        overflow: hidden hidden;
     }
 
     #telemetry-wrapper {
-        height: 14;
+        height: 1fr;
         border: round #242938;
         background: #13161f;
         margin-bottom: 1;
         padding: 0 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    #telemetry-wrapper:focus-within {
+        border: round #3d5470;
     }
 
     #visualizer-wrapper {
@@ -148,6 +180,11 @@ class TranscoderTUI(App):
         border: round #242938;
         background: #13161f;
         padding: 0 1;
+        overflow: hidden;
+    }
+
+    #visualizer-wrapper:focus-within {
+        border: round #3d5470;
     }
 
     #event-log {
@@ -263,6 +300,23 @@ class TranscoderTUI(App):
 
         # Timer to keep status bar synchronized with queue
         self.set_interval(0.5, self._sync_telemetry)
+
+        # Initial responsive check for compact telemetry on smaller terminals
+        try:
+            rm = self.query_one("#resource-monitor", ResourceMonitorWidget)
+            rm.compact = (self.size.width < 100)
+            rm.refresh_telemetry()
+        except Exception:
+            pass
+
+    def on_resize(self, event: Any) -> None:
+        """Adapts widget presentation dynamically across terminal sizes."""
+        try:
+            rm = self.query_one("#resource-monitor", ResourceMonitorWidget)
+            rm.compact = (event.size.width < 100)
+            rm.refresh_telemetry()
+        except Exception:
+            pass
 
     # =========================================================================
     # User Actions & Keybindings
